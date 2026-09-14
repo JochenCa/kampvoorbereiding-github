@@ -142,6 +142,7 @@
       '</div>';
   }
 
+  KV.renderVersionBadge();
   document.getElementById("print-btn").addEventListener("click", function () { window.print(); });
 
   if (!KV.SETUP_NEEDED) refresh(); else renderSetupNeeded();

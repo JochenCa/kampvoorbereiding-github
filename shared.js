@@ -93,6 +93,66 @@ var KV = (function () {
     ]}
   ];
 
+  /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
+     nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
+  var VERSION = "1.4";
+  var CHANGELOG = [
+    { version: "1.4", date: "2026-09-14", changes: [
+      "Tegels om tussen de pagina's te navigeren, op elke pagina",
+      "Paneel met dringende stappen over alle actieve kampen heen",
+      "Nieuwe pagina: financieel overzicht per editie",
+      "Budget-knop op de kampkaart springt naar dat ene kamp",
+      "Klimzaal: datum aanvraag ingediend en datum akkoord",
+      "Begeleiders met e-mailadres, en een automatische herinnering 3 dagen na een gemiste streefdatum"
+    ]},
+    { version: "1.3", date: "2026-09-14", changes: [
+      "Site live op GitHub Pages, te delen met de andere begeleiders",
+      "Toegangscode: zonder die code geeft de backend geen gegevens vrij",
+      "Sneller en stabieler verbinden (cache + automatisch opnieuw proberen)"
+    ]},
+    { version: "1.2", date: "2026-09-14", changes: [
+      "Camping en notities per kamp",
+      "Afdrukbare fiche per kamp"
+    ]},
+    { version: "1.1", date: "2026-09-12", changes: [
+      "Budget per kamp: inkomsten, uitgaven en kasticketfoto's"
+    ]},
+    { version: "1.0", date: "2026-09-11", changes: [
+      "Eerste versie: kampen aanmaken, checklist van 9 fases, archief"
+    ]}
+  ];
+
+  /** Zet het versienummer linksboven in de .eyebrow van de pagina; klikken
+   *  opent de geschiedenis. Wordt automatisch opgeroepen door
+   *  createPageRuntime, zodat elke pagina dit zonder eigen code krijgt. */
+  function renderVersionBadge() {
+    var eyebrow = document.querySelector(".eyebrow");
+    if (!eyebrow || eyebrow.querySelector(".version-wrap")) return;
+    var wrap = document.createElement("span");
+    wrap.className = "version-wrap";
+    wrap.innerHTML =
+      '<button type="button" class="version-badge" aria-expanded="false" title="Versiegeschiedenis">v' + VERSION + '</button>' +
+      '<div class="version-panel" hidden>' +
+        CHANGELOG.map(function (e) {
+          return '<div class="version-entry">' +
+            '<h4>v' + escapeHtml(e.version) + ' <span>' + escapeHtml(e.date) + '</span></h4>' +
+            '<ul>' + e.changes.map(function (c) { return '<li>' + escapeHtml(c) + '</li>'; }).join("") + '</ul>' +
+          '</div>';
+        }).join("") +
+      '</div>';
+    eyebrow.appendChild(wrap);
+
+    var btn = wrap.querySelector(".version-badge");
+    var panel = wrap.querySelector(".version-panel");
+    btn.addEventListener("click", function () {
+      panel.hidden = !panel.hidden;
+      btn.setAttribute("aria-expanded", String(!panel.hidden));
+    });
+    document.addEventListener("click", function (e) {
+      if (!wrap.contains(e.target)) { panel.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+    });
+  }
+
   var TYPE_LABELS = { "-18": "-18-kamp", "+18": "+18-kamp", "winter": "Winterkamp" };
   var EXPENSE_CATEGORIES = ["Boodschappen", "Restaurant", "Vervoer", "Verblijf", "Materiaal", "Andere"];
   var BASE_BEGELEIDERS = ["Jochen", "Jordy", "Wout"];
@@ -238,6 +298,8 @@ var KV = (function () {
   function createPageRuntime(opts) {
     var connState = "connecting", lastError = "", pollTimer = null;
     var suspended = false, pending = false;
+
+    renderVersionBadge();
 
     function renderAll() {
       if (suspended) { pending = true; return; }
@@ -563,6 +625,7 @@ var KV = (function () {
     parseGuides: parseGuides, formatGuides: formatGuides, guideNames: guideNames,
     saveApiUrl: saveApiUrl, renderSetupBanner: renderSetupBanner,
     renderConnStatus: renderConnStatus, createPageRuntime: createPageRuntime,
+    VERSION: VERSION, CHANGELOG: CHANGELOG, renderVersionBadge: renderVersionBadge,
     apiGet: apiGet, apiPost: apiPost, fetchAll: fetchAll,
     renderCampCard: renderCampCard, renderStepRow: renderStepRow, bindCampCard: bindCampCard,
     saveDraft: saveDraft, loadDraft: loadDraft, clearDraft: clearDraft, draftIsEmpty: draftIsEmpty,
