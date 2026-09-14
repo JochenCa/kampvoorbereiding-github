@@ -41,45 +41,11 @@
   "use strict";
 
   var camps = [], income = [], expenses = [];
-  var connState = "connecting";
-  var lastError = "";
-  var pollTimer = null;
 
-  function refresh() {
-    if (KV.SETUP_NEEDED) { render(); return Promise.resolve(); }
-    return KV.fetchAll().then(function (data) {
-      camps = data.camps; income = data.income; expenses = data.expenses;
-      connState = "ok"; lastError = "";
-      render();
-    }).catch(function (err) {
-      connState = "error"; lastError = err && err.message ? err.message : String(err);
-      render();
-    });
-  }
-
-  function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(function () { refresh(); }, KV.CONFIG.POLL_MS);
-  }
-
-  function render() {
-    renderConnStatus();
-    renderOverzicht();
-  }
-
-  function renderConnStatus() {
-    var dot = document.getElementById("conn-dot");
-    var text = document.getElementById("conn-text");
-    var slot = document.getElementById("banner-slot");
-    if (KV.SETUP_NEEDED) {
-      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
-      KV.renderSetupBanner("banner-slot");
-      return;
-    }
-    if (connState === "connecting") { dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = ""; }
-    else if (connState === "error") { dot.className = "dot bad"; text.textContent = "Kan niet verbinden"; slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(lastError) + ').</div>'; }
-    else { dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(KV.CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = ""; }
-  }
+  var runtime = KV.createPageRuntime({
+    onData: function (data) { camps = data.camps; income = data.income; expenses = data.expenses; },
+    render: function () { renderOverzicht(); }
+  });
 
   /** Sommeert de uitgaven van één kamp per vaste categorie (EXPENSE_CATEGORIES) —
    *  een "Andere"-uitgave met een eigen omschrijving telt hier gewoon mee onder
@@ -98,7 +64,7 @@
     var slot = document.getElementById("overzicht-slot");
     if (KV.SETUP_NEEDED) { slot.innerHTML = ""; return; }
     if (camps.length === 0) {
-      if (connState === "ok") slot.innerHTML = '<div class="empty"><h3>Nog geen kampen</h3><p>Zodra er kampen met budgetgegevens zijn, verschijnt hier het overzicht per editie.</p></div>';
+      if (runtime.state() === "ok") slot.innerHTML = '<div class="empty"><h3>Nog geen kampen</h3><p>Zodra er kampen met budgetgegevens zijn, verschijnt hier het overzicht per editie.</p></div>';
       else slot.innerHTML = "";
       return;
     }
@@ -158,9 +124,6 @@
       '</table></div>';
   }
 
-  document.getElementById("refresh-btn").addEventListener("click", function () { refresh(); });
-
-  render();
-  if (!KV.SETUP_NEEDED) { refresh().then(startPolling); }
+  runtime.start();
 })();
 </script>

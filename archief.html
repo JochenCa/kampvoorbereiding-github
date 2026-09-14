@@ -43,7 +43,7 @@
 (function () {
   "use strict";
 
-  var EMPTY_DRAFT = { name: "", type: "-18", customLabel: "", destination: "", startDate: "", endDate: "", transport: "", guides: "", camping: "", notes: "" };
+  var EMPTY_DRAFT = { name: "", type: "-18", customLabel: "", destination: "", startDate: "", endDate: "", transport: "", guides: "", camping: "", notes: "", requestDate: "", approvalDate: "" };
 
   var camps = [];
   var steps = [];
@@ -52,53 +52,17 @@
   var formCampId = null;
   var formDraft = Object.assign({}, EMPTY_DRAFT);
   var savingCamp = false;
-  var suspendRender = false;
-  var pendingRender = false;
-  var connState = "connecting";
-  var lastError = "";
-  var pollTimer = null;
 
-  function refresh() {
-    if (KV.SETUP_NEEDED) { render(); return Promise.resolve(); }
-    return KV.fetchAll().then(function (data) {
+  var runtime = KV.createPageRuntime({
+    onData: function (data) {
       camps = data.camps; steps = data.steps;
-      connState = "ok"; lastError = "";
       KV.renderBegeleiderDatalist(camps);
-      render();
-    }).catch(function (err) {
-      connState = "error"; lastError = err && err.message ? err.message : String(err);
-      render();
-    });
-  }
+    },
+    render: function () { renderForm(); renderCamps(); }
+  });
 
-  function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(function () {
-      if (!suspendRender) refresh(); else pendingRender = true;
-    }, KV.CONFIG.POLL_MS);
-  }
-
-  function render() {
-    if (suspendRender) { pendingRender = true; return; }
-    renderConnStatus();
-    renderForm();
-    renderCamps();
-  }
-  function scheduleRenderAfterEdit() { if (pendingRender) { pendingRender = false; refresh(); } }
-
-  function renderConnStatus() {
-    var dot = document.getElementById("conn-dot");
-    var text = document.getElementById("conn-text");
-    var slot = document.getElementById("banner-slot");
-    if (KV.SETUP_NEEDED) {
-      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
-      KV.renderSetupBanner("banner-slot");
-      return;
-    }
-    if (connState === "connecting") { dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = ""; }
-    else if (connState === "error") { dot.className = "dot bad"; text.textContent = "Kan niet verbinden"; slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(lastError) + '). Controleer je internetverbinding en of de Web-app-link nog klopt.</div>'; }
-    else { dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(KV.CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = ""; }
-  }
+  function refresh() { return runtime.refresh(); }
+  function render() { runtime.render(); }
 
   function renderForm() {
     var slot = document.getElementById("form-slot");
@@ -122,8 +86,10 @@
           '<div class="form-field"><label for="f-start">Vertrekdatum</label><input id="f-start" type="date" value="' + KV.escapeHtml(formDraft.startDate) + '"></div>' +
           '<div class="form-field"><label for="f-end">Terugkeerdatum</label><input id="f-end" type="date" value="' + KV.escapeHtml(formDraft.endDate) + '"></div>' +
           '<div class="form-field"><label for="f-transport">Vervoer</label><input id="f-transport" type="text" value="' + KV.escapeHtml(formDraft.transport) + '"></div>' +
-          '<div class="form-field"><label for="f-guides">Begeleiders</label><input id="f-guides" type="text" value="' + KV.escapeHtml(formDraft.guides) + '"></div>' +
+          '<div class="form-field span2"><label>Begeleiders (naam + e-mail voor herinneringen)</label>' + renderGuideRows() + '</div>' +
           '<div class="form-field"><label for="f-camping">Camping</label><input id="f-camping" type="text" value="' + KV.escapeHtml(formDraft.camping) + '"></div>' +
+          '<div class="form-field"><label for="f-request">Aanvraag ingediend</label><input id="f-request" type="date" value="' + KV.escapeHtml(formDraft.requestDate) + '"></div>' +
+          '<div class="form-field"><label for="f-approval">Akkoord klimzaal</label><input id="f-approval" type="date" value="' + KV.escapeHtml(formDraft.approvalDate) + '"></div>' +
           '<div class="form-field span2"><label for="f-notes">Notities</label><textarea id="f-notes" rows="3">' + KV.escapeHtml(formDraft.notes) + '</textarea></div>' +
         '</div>' +
         '<div class="form-actions">' +
@@ -144,11 +110,63 @@
     bindInput("f-start", function (v) { formDraft.startDate = v; });
     bindInput("f-end", function (v) { formDraft.endDate = v; });
     bindInput("f-transport", function (v) { formDraft.transport = v; });
-    bindInput("f-guides", function (v) { formDraft.guides = v; });
+    bindGuideRows();
     bindInput("f-camping", function (v) { formDraft.camping = v; });
+    bindInput("f-request", function (v) { formDraft.requestDate = v; });
+    bindInput("f-approval", function (v) { formDraft.approvalDate = v; });
     bindInput("f-notes", function (v) { formDraft.notes = v; });
     document.getElementById("f-submit").addEventListener("click", submitEditCamp);
     document.getElementById("f-cancel").addEventListener("click", closeForm);
+  }
+
+  /** Begeleiders worden als één tekstveld bewaard ("Naam <e-mail>, ..."), maar
+   *  hier per persoon ingevuld: één rij per begeleider, plus altijd één lege
+   *  rij om iemand toe te voegen. */
+  function renderGuideRows() {
+    var list = KV.parseGuides(formDraft.guides);
+    list.push({ name: "", email: "" });
+    return '<div class="guide-rows">' + list.map(function (g, i) {
+      return '<div class="guide-row">' +
+        '<input type="text" data-guide-name="' + i + '" placeholder="naam" value="' + KV.escapeHtml(g.name) + '">' +
+        '<input type="email" data-guide-email="' + i + '" placeholder="e-mailadres" value="' + KV.escapeHtml(g.email) + '">' +
+      '</div>';
+    }).join("") + '</div>';
+  }
+
+  function bindGuideRows() {
+    var slot = document.querySelector(".guide-rows");
+    if (!slot) return;
+
+    function collect() {
+      var list = [];
+      slot.querySelectorAll(".guide-row").forEach(function (row) {
+        list.push({
+          name: row.querySelector("[data-guide-name]").value,
+          email: row.querySelector("[data-guide-email]").value
+        });
+      });
+      formDraft.guides = KV.formatGuides(list);
+      ensureEmptyRow();
+    }
+
+    // Groeit mee terwijl je typt: zodra de laatste rij een naam krijgt, komt er
+    // stil een lege rij onder. Rechtstreeks in de DOM, niet via een volledige
+    // hertekening — anders springt de cursor weg terwijl je bezig bent.
+    function ensureEmptyRow() {
+      var rows = slot.querySelectorAll(".guide-row");
+      var last = rows[rows.length - 1];
+      if (!last || !last.querySelector("[data-guide-name]").value.trim()) return;
+      var i = rows.length;
+      var div = document.createElement("div");
+      div.className = "guide-row";
+      div.innerHTML =
+        '<input type="text" data-guide-name="' + i + '" placeholder="naam">' +
+        '<input type="email" data-guide-email="' + i + '" placeholder="e-mailadres">';
+      slot.appendChild(div);
+      div.querySelectorAll("input").forEach(function (inp) { inp.addEventListener("input", collect); });
+    }
+
+    slot.querySelectorAll("input").forEach(function (inp) { inp.addEventListener("input", collect); });
   }
 
   function closeForm() {
@@ -169,9 +187,9 @@
 
     var slot = document.getElementById("camps-slot");
     if (KV.SETUP_NEEDED) { slot.innerHTML = ""; }
-    else if (archived.length === 0 && connState === "ok") {
+    else if (archived.length === 0 && runtime.state() === "ok") {
       slot.innerHTML = '<div class="empty"><h3>Archief is leeg</h3><p>Zodra je op de <a href="kampvoorbereiding.html">hoofdpagina</a> een kamp archiveert, verschijnt het hier.</p></div>';
-    } else if (connState !== "ok" && camps.length === 0) {
+    } else if (runtime.state() !== "ok" && camps.length === 0) {
       slot.innerHTML = "";
     } else {
       slot.innerHTML = '<div class="camps-section">' + archived.map(function (c) {
@@ -202,7 +220,8 @@
       name: camp.name || "", type: camp.type || "-18", customLabel: camp.customLabel || "",
       destination: camp.destination || "", startDate: camp.startDate || "", endDate: camp.endDate || "",
       transport: camp.transport || "", guides: camp.guides || "",
-      camping: camp.camping || "", notes: camp.notes || ""
+      camping: camp.camping || "", notes: camp.notes || "",
+      requestDate: camp.requestDate || "", approvalDate: camp.approvalDate || ""
     };
     formOpen = true;
     render();
@@ -221,7 +240,8 @@
       customLabel: formDraft.type === "custom" ? formDraft.customLabel.trim() : "",
       destination: formDraft.destination.trim(), startDate: formDraft.startDate || "",
       endDate: formDraft.endDate || "", transport: formDraft.transport.trim(), guides: formDraft.guides.trim(),
-      camping: formDraft.camping.trim(), notes: formDraft.notes.trim()
+      camping: formDraft.camping.trim(), notes: formDraft.notes.trim(),
+      requestDate: formDraft.requestDate || "", approvalDate: formDraft.approvalDate || ""
     };
 
     // Optimistisch: meteen lokaal tonen en sluiten, niet wachten op de server.
@@ -255,15 +275,6 @@
     refresh();
   }
 
-  document.addEventListener("focusin", function (e) {
-    if (e.target.matches && e.target.matches("input, select")) suspendRender = true;
-  });
-  document.addEventListener("focusout", function (e) {
-    if (e.target.matches && e.target.matches("input, select")) { suspendRender = false; scheduleRenderAfterEdit(); }
-  });
-  document.getElementById("refresh-btn").addEventListener("click", function () { refresh(); });
-
-  render();
-  if (!KV.SETUP_NEEDED) { refresh().then(startPolling); }
+  runtime.start();
 })();
 </script>

@@ -115,7 +115,9 @@
           field("Camping", camp.camping) +
           field("Data", range) +
           field("Vervoer", camp.transport) +
-          field("Begeleiders", camp.guides) +
+          field("Begeleiders", KV.guideNames(camp.guides).join(", ")) +
+          field("Aanvraag ingediend", camp.requestDate) +
+          field("Akkoord klimzaal", camp.approvalDate) +
         '</div>' +
 
         (camp.notes ? '<div class="fiche-section"><h3>Notities</h3><div class="fiche-notes">' + KV.escapeHtml(camp.notes).replace(/\n/g, "<br>") + '</div></div>' : '') +

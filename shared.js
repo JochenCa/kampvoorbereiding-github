@@ -145,18 +145,39 @@ var KV = (function () {
     return "";
   }
 
-  /** Basisnamen + alle namen die ooit als "begeleiders" (kommagescheiden) bij
-   *  een kamp werden ingevuld, gededupliceerd en gesorteerd — zo duiken
-   *  eigen namen automatisch op als suggestie bij het "Wie?"-veld van de
-   *  takenlijst, niet enkel de drie vaste namen. */
+  /** Begeleiders staan in één veld als "Naam <e-mail>, Naam2 <e-mail2>" —
+   *  leesbaar in de Sheet zelf, en een naam zonder e-mailadres (zoals in de
+   *  oudere kampen, die enkel "Jochen, Wout" bevatten) blijft gewoon geldig. */
+  function parseGuides(guidesStr) {
+    return String(guidesStr || "").split(",").map(function (part) {
+      var m = part.match(/^\s*(.*?)\s*<([^>]*)>\s*$/);
+      if (m) return { name: m[1].trim(), email: m[2].trim() };
+      return { name: part.trim(), email: "" };
+    }).filter(function (g) { return g.name || g.email; });
+  }
+
+  function formatGuides(list) {
+    return (list || []).filter(function (g) { return (g.name || "").trim(); })
+      .map(function (g) {
+        var name = g.name.trim();
+        var email = (g.email || "").trim();
+        return email ? name + " <" + email + ">" : name;
+      }).join(", ");
+  }
+
+  function guideNames(guidesStr) {
+    return parseGuides(guidesStr).map(function (g) { return g.name; }).filter(Boolean);
+  }
+
+  /** Basisnamen + alle namen die ooit als begeleider bij een kamp werden
+   *  ingevuld, gededupliceerd en gesorteerd — zo duiken eigen namen
+   *  automatisch op als suggestie bij het "Wie?"-veld van de takenlijst,
+   *  niet enkel de drie vaste namen. */
   function begeleiderOptions(camps) {
     var set = {};
     BASE_BEGELEIDERS.forEach(function (n) { set[n] = true; });
     (camps || []).forEach(function (c) {
-      String(c.guides || "").split(",").forEach(function (n) {
-        n = n.trim();
-        if (n) set[n] = true;
-      });
+      guideNames(c.guides).forEach(function (n) { set[n] = true; });
     });
     return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
   }
@@ -185,6 +206,84 @@ var KV = (function () {
       saveAccessKey(key);
       location.reload();
     });
+  }
+
+  /** Werkt de verbindingsindicator (#conn-dot/#conn-text) en #banner-slot bij.
+   *  `state` is "setup", "connecting", "error" of "ok". */
+  function renderConnStatus(state, errorMsg) {
+    var dot = document.getElementById("conn-dot");
+    var text = document.getElementById("conn-text");
+    var slot = document.getElementById("banner-slot");
+    if (!dot || !text || !slot) return;
+    if (state === "setup") {
+      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
+      renderSetupBanner("banner-slot");
+    } else if (state === "connecting") {
+      dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = "";
+    } else if (state === "error") {
+      dot.className = "dot bad"; text.textContent = "Kan niet verbinden";
+      slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + escapeHtml(errorMsg) + '). Controleer je internetverbinding en of de Web-app-link nog klopt. De pagina blijft het opnieuw proberen.</div>';
+    } else {
+      dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = "";
+    }
+  }
+
+  /** Gedeelde motor achter elke pagina: ophalen, verbindingsstatus tonen,
+   *  periodiek verversen, en verversen pauzeren zolang iemand in een invoerveld
+   *  bezig is (anders verdwijnt wat je aan het typen bent onder je vingers).
+   *  Elke pagina geeft enkel mee wat ze zelf met de data doet:
+   *    onData(data) — data bewaren in de eigen variabelen
+   *    render()     — de eigen pagina-onderdelen tekenen
+   *  Terug krijg je { start, refresh, render, state }. */
+  function createPageRuntime(opts) {
+    var connState = "connecting", lastError = "", pollTimer = null;
+    var suspended = false, pending = false;
+
+    function renderAll() {
+      if (suspended) { pending = true; return; }
+      renderConnStatus(SETUP_NEEDED ? "setup" : connState, lastError);
+      opts.render();
+    }
+
+    function refresh() {
+      if (SETUP_NEEDED) { renderAll(); return Promise.resolve(); }
+      return fetchAll().then(function (data) {
+        connState = "ok"; lastError = "";
+        opts.onData(data);
+        renderAll();
+      }).catch(function (err) {
+        connState = "error"; lastError = err && err.message ? err.message : String(err);
+        renderAll();
+      });
+    }
+
+    function start() {
+      renderAll();
+      if (SETUP_NEEDED) return;
+      refresh().then(function () {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(function () { if (suspended) pending = true; else refresh(); }, CONFIG.POLL_MS);
+      });
+    }
+
+    document.addEventListener("focusin", function (e) {
+      if (e.target.matches && e.target.matches("input, select, textarea")) suspended = true;
+    });
+    document.addEventListener("focusout", function (e) {
+      if (e.target.matches && e.target.matches("input, select, textarea")) {
+        suspended = false;
+        if (pending) { pending = false; refresh(); }
+      }
+    });
+    var refreshBtn = document.getElementById("refresh-btn");
+    if (refreshBtn) refreshBtn.addEventListener("click", function () { refresh(); });
+
+    return {
+      start: start,
+      refresh: refresh,
+      render: renderAll,
+      state: function () { return connState; }
+    };
   }
 
   /** Vult het gedeelde <datalist id="begeleiders-list"> in de pagina met de
@@ -265,7 +364,9 @@ var KV = (function () {
           // weggeschreven (geen Sheet-herstel nodig).
           type: c.type == null ? "" : String(c.type),
           archived: boolish(c.archived),
-          startDate: normalizeDateStr(c.startDate)
+          startDate: normalizeDateStr(c.startDate),
+          requestDate: normalizeDateStr(c.requestDate),
+          approvalDate: normalizeDateStr(c.approvalDate)
         });
       });
       var steps = (data.steps || []).map(function (s) {
@@ -309,8 +410,10 @@ var KV = (function () {
     }
     var adminBits = [];
     if (camp.camping) adminBits.push('<span>Camping: ' + escapeHtml(camp.camping) + '</span>');
-    if (camp.guides) adminBits.push('<span>Begeleiders: ' + escapeHtml(camp.guides) + '</span>');
+    if (camp.guides) adminBits.push('<span>Begeleiders: ' + escapeHtml(guideNames(camp.guides).join(", ")) + '</span>');
     if (camp.transport) adminBits.push('<span>Vervoer: ' + escapeHtml(camp.transport) + '</span>');
+    if (camp.requestDate) adminBits.push('<span>Aanvraag: ' + escapeHtml(camp.requestDate) + '</span>');
+    if (camp.approvalDate) adminBits.push('<span>Akkoord klimzaal: ' + escapeHtml(camp.approvalDate) + '</span>');
 
     var byPhase = {}, phaseOrder = [];
     campSteps.forEach(function (s) {
@@ -419,7 +522,7 @@ var KV = (function () {
     try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* negeren */ }
   }
   function draftIsEmpty(d) {
-    return !d || (!d.name && !d.customLabel && !d.destination && !d.startDate && !d.endDate && !d.transport && !d.guides && !d.camping && !d.notes);
+    return !d || (!d.name && !d.customLabel && !d.destination && !d.startDate && !d.endDate && !d.transport && !d.guides && !d.camping && !d.notes && !d.requestDate && !d.approvalDate);
   }
 
   /* ---------------- Kasticket-foto: client-side verkleinen ---------------- */
@@ -457,7 +560,9 @@ var KV = (function () {
     normalizeDateStr: normalizeDateStr, boolish: boolish, formatEUR: formatEUR, stepStatusClass: stepStatusClass,
     typeLabel: typeLabel, stepsForCamp: stepsForCamp, buildDefaultSteps: buildDefaultSteps,
     begeleiderOptions: begeleiderOptions, renderBegeleiderDatalist: renderBegeleiderDatalist,
+    parseGuides: parseGuides, formatGuides: formatGuides, guideNames: guideNames,
     saveApiUrl: saveApiUrl, renderSetupBanner: renderSetupBanner,
+    renderConnStatus: renderConnStatus, createPageRuntime: createPageRuntime,
     apiGet: apiGet, apiPost: apiPost, fetchAll: fetchAll,
     renderCampCard: renderCampCard, renderStepRow: renderStepRow, bindCampCard: bindCampCard,
     saveDraft: saveDraft, loadDraft: loadDraft, clearDraft: clearDraft, draftIsEmpty: draftIsEmpty,

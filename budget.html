@@ -47,70 +47,34 @@
   var incomeDrafts = {};   // campId -> { amount, description, date }
   var expenseDrafts = {};  // campId -> { amount, category, customCategory, description, date, fileBase64, fileMimeType, fileLabel }
   var busyCampIds = new Set(); // campId's die net een upload/opslag aan het verwerken zijn
-  var suspendRender = false;
-  var pendingRender = false;
-  var connState = "connecting";
-  var lastError = "";
-  var pollTimer = null;
   var autoExpandDone = false; // klapt bij het allereerste laden alle kampen open, zodat de "toevoegen"-vakken meteen zichtbaar zijn
   var deepLinkId = new URLSearchParams(location.search).get("id"); // vanaf de "Budget"-knop op een kampkaart: enkel dát kamp open+scrollen
   var scrolledToDeepLink = false;
 
-  function emptyIncomeDraft() { return { amount: "", description: "", date: KV.todayStr() }; }
-  function emptyExpenseDraft() { return { amount: "", category: "Boodschappen", customCategory: "", description: "", date: KV.todayStr(), fileBase64: "", fileMimeType: "", fileLabel: "" }; }
-  function draftFor(map, campId, maker) { if (!map[campId]) map[campId] = maker(); return map[campId]; }
-
-  function refresh() {
-    if (KV.SETUP_NEEDED) { render(); return Promise.resolve(); }
-    return KV.fetchAll().then(function (data) {
+  var runtime = KV.createPageRuntime({
+    onData: function (data) {
       camps = data.camps; income = data.income; expenses = data.expenses;
-      connState = "ok"; lastError = "";
       if (!autoExpandDone && camps.length) {
         if (deepLinkId) expandedIds.add(deepLinkId);
         else camps.forEach(function (c) { expandedIds.add(c.id); });
         autoExpandDone = true;
       }
-      render();
-    }).catch(function (err) {
-      connState = "error"; lastError = err && err.message ? err.message : String(err);
-      render();
-    });
-  }
+    },
+    render: function () { renderCamps(); maybeScrollToDeepLink(); }
+  });
 
-  function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(function () {
-      if (!suspendRender) refresh(); else pendingRender = true;
-    }, KV.CONFIG.POLL_MS);
-  }
+  function emptyIncomeDraft() { return { amount: "", description: "", date: KV.todayStr() }; }
+  function emptyExpenseDraft() { return { amount: "", category: "Boodschappen", customCategory: "", description: "", date: KV.todayStr(), fileBase64: "", fileMimeType: "", fileLabel: "" }; }
+  function draftFor(map, campId, maker) { if (!map[campId]) map[campId] = maker(); return map[campId]; }
 
-  function render() {
-    if (suspendRender) { pendingRender = true; return; }
-    renderConnStatus();
-    renderCamps();
-    maybeScrollToDeepLink();
-  }
+  function refresh() { return runtime.refresh(); }
+  function render() { runtime.render(); }
   function maybeScrollToDeepLink() {
     if (!deepLinkId || scrolledToDeepLink) return;
     var card = document.querySelector('.camp[data-camp-id="' + KV.cssEscape(deepLinkId) + '"]');
     if (!card) return;
     card.scrollIntoView({ behavior: "smooth", block: "start" });
     scrolledToDeepLink = true;
-  }
-  function scheduleRenderAfterEdit() { if (pendingRender) { pendingRender = false; refresh(); } }
-
-  function renderConnStatus() {
-    var dot = document.getElementById("conn-dot");
-    var text = document.getElementById("conn-text");
-    var slot = document.getElementById("banner-slot");
-    if (KV.SETUP_NEEDED) {
-      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
-      KV.renderSetupBanner("banner-slot");
-      return;
-    }
-    if (connState === "connecting") { dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = ""; }
-    else if (connState === "error") { dot.className = "dot bad"; text.textContent = "Kan niet verbinden"; slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(lastError) + '). Controleer je internetverbinding en of de Web-app-link nog klopt.</div>'; }
-    else { dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(KV.CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = ""; }
   }
 
   function campTotals(campId) {
@@ -122,7 +86,7 @@
   function renderCamps() {
     var slot = document.getElementById("camps-slot");
     if (KV.SETUP_NEEDED) { slot.innerHTML = ""; return; }
-    if (camps.length === 0 && connState === "ok") {
+    if (camps.length === 0 && runtime.state() === "ok") {
       slot.innerHTML = '<div class="empty"><h3>Nog geen kampen</h3><p>Maak eerst een kamp aan op de <a href="kampvoorbereiding.html">hoofdpagina</a> — daarna verschijnt het hier met zijn eigen budget.</p></div>';
       return;
     }
@@ -335,15 +299,6 @@
     refresh();
   }
 
-  document.addEventListener("focusin", function (e) {
-    if (e.target.matches && e.target.matches("input, select")) suspendRender = true;
-  });
-  document.addEventListener("focusout", function (e) {
-    if (e.target.matches && e.target.matches("input, select")) { suspendRender = false; scheduleRenderAfterEdit(); }
-  });
-  document.getElementById("refresh-btn").addEventListener("click", function () { refresh(); });
-
-  render();
-  if (!KV.SETUP_NEEDED) { refresh().then(startPolling); }
+  runtime.start();
 })();
 </script>
