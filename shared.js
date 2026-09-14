@@ -18,18 +18,25 @@ var KV = (function () {
      (localStorage), nooit in de broncode. */
   var CONFIG = {
     API_URL: "",
+    ACCESS_KEY: "",
     POLL_MS: 10000
   };
   /* ======================================= */
 
   var API_URL_KEY = "kampvoorbereiding:api-url:v1";
+  var ACCESS_KEY_KEY = "kampvoorbereiding:access-key:v1";
   try {
     var storedApiUrl = localStorage.getItem(API_URL_KEY);
     if (storedApiUrl) CONFIG.API_URL = storedApiUrl;
+    var storedAccessKey = localStorage.getItem(ACCESS_KEY_KEY);
+    if (storedAccessKey) CONFIG.ACCESS_KEY = storedAccessKey;
   } catch (e) { /* geen localStorage: blijft bij de waarde hierboven */ }
 
   function saveApiUrl(url) {
     try { localStorage.setItem(API_URL_KEY, url); } catch (e) { /* negeren */ }
+  }
+  function saveAccessKey(key) {
+    try { localStorage.setItem(ACCESS_KEY_KEY, key); } catch (e) { /* negeren */ }
   }
 
   var DEFAULT_CHECKLIST = [
@@ -89,7 +96,7 @@ var KV = (function () {
   var TYPE_LABELS = { "-18": "-18-kamp", "+18": "+18-kamp", "winter": "Winterkamp" };
   var EXPENSE_CATEGORIES = ["Boodschappen", "Restaurant", "Vervoer", "Verblijf", "Materiaal", "Andere"];
   var BASE_BEGELEIDERS = ["Jochen", "Jordy", "Wout"];
-  var SETUP_NEEDED = !CONFIG.API_URL || CONFIG.API_URL.indexOf("PASTE_") === 0;
+  var SETUP_NEEDED = !CONFIG.API_URL || !CONFIG.ACCESS_KEY || CONFIG.API_URL.indexOf("PASTE_") === 0;
   var DRAFT_KEY = "kampvoorbereiding:new-camp-draft:v1";
 
   function escapeHtml(s) {
@@ -163,16 +170,19 @@ var KV = (function () {
     if (!slot) return;
     slot.innerHTML =
       '<div class="banner bad">' +
-        '<div style="margin-bottom:10px">Deze pagina is nog niet gekoppeld aan de gedeelde Google Sheet. Plak hieronder de Web-app-link (zie README.md bij de eenmalige opzet) — dit hoeft maar één keer per toestel/browser.</div>' +
+        '<div style="margin-bottom:10px">Deze pagina is nog niet gekoppeld aan de gedeelde Google Sheet. Plak hieronder de Web-app-link én de toegangscode (vraag ze na bij een medebegeleider) — dit hoeft maar één keer per toestel/browser.</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          '<input type="text" id="kv-setup-url" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1;min-width:240px;padding:8px 10px;border-radius:5px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-family:var(--font-mono);font-size:12.5px;">' +
+          '<input type="text" id="kv-setup-url" placeholder="https://script.google.com/macros/s/.../exec" style="flex:2;min-width:240px;padding:8px 10px;border-radius:5px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-family:var(--font-mono);font-size:12.5px;">' +
+          '<input type="password" id="kv-setup-key" placeholder="toegangscode" style="flex:1;min-width:140px;padding:8px 10px;border-radius:5px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-family:var(--font-mono);font-size:12.5px;">' +
           '<button type="button" class="btn primary" id="kv-setup-save">Opslaan</button>' +
         '</div>' +
       '</div>';
     document.getElementById("kv-setup-save").addEventListener("click", function () {
-      var val = document.getElementById("kv-setup-url").value.trim();
-      if (!val) return;
-      saveApiUrl(val);
+      var url = document.getElementById("kv-setup-url").value.trim();
+      var key = document.getElementById("kv-setup-key").value.trim();
+      if (!url || !key) return;
+      saveApiUrl(url);
+      saveAccessKey(key);
       location.reload();
     });
   }
@@ -206,13 +216,14 @@ var KV = (function () {
   /* ---------------- API laag (Google Apps Script) ---------------- */
 
   function apiGet() {
-    return fetch(CONFIG.API_URL, { method: "GET" }).then(function (r) { return r.json(); });
+    var sep = CONFIG.API_URL.indexOf("?") === -1 ? "?" : "&";
+    return fetch(CONFIG.API_URL + sep + "key=" + encodeURIComponent(CONFIG.ACCESS_KEY), { method: "GET" }).then(function (r) { return r.json(); });
   }
   function apiPost(action, payload) {
     return fetch(CONFIG.API_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: action, payload: payload })
+      body: JSON.stringify({ action: action, payload: payload, key: CONFIG.ACCESS_KEY })
     }).then(function (r) { return r.json(); }).then(function (json) {
       if (!json.ok) throw new Error(json.error || "onbekende fout van de API");
       return json.result;
