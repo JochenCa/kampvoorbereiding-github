@@ -181,13 +181,13 @@ var KV = (function () {
     wrap.innerHTML =
       '<button type="button" class="version-badge" aria-expanded="false" title="Versiegeschiedenis">v' + VERSION + '</button>' +
       '<div class="version-panel" hidden>' +
+        '<div class="version-head"><button type="button" class="version-link" id="kv-open-cfg">Verbinding wijzigen…</button></div>' +
         CHANGELOG.map(function (e) {
           return '<div class="version-entry">' +
             '<h4>v' + escapeHtml(e.version) + ' <span>' + escapeHtml(e.date) + '</span></h4>' +
             '<ul>' + e.changes.map(function (c) { return '<li>' + escapeHtml(c) + '</li>'; }).join("") + '</ul>' +
           '</div>';
         }).join("") +
-        '<div class="version-foot"><button type="button" class="version-link" id="kv-open-cfg">Verbinding wijzigen…</button></div>' +
       '</div>';
     eyebrow.appendChild(wrap);
 
