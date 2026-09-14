@@ -1,0 +1,333 @@
+<title>Kampvoorbereiding</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<div class="page">
+  <header class="top">
+    <div>
+      <div class="eyebrow"><span class="dot" id="conn-dot"></span><span id="conn-text">Verbinden…</span></div>
+      <h1>Kampvoorbereiding</h1>
+      <p class="dek">Gedeelde checklist voor de voorbereiding van elk bergkamp — van aanvraag tot vertrek. Gegevens staan in een gedeelde Google Sheet; deze pagina ververst elke 10 seconden.</p>
+      <a class="top-link" href="archief.html">→ Archief bekijken</a>
+      <a class="top-link" href="budget.html">→ Budget: inkomsten &amp; uitgaven invoegen</a>
+    </div>
+    <div class="head-actions">
+      <button class="btn icon" id="refresh-btn" type="button" title="Nu vernieuwen">↻</button>
+      <button class="btn primary" id="new-camp-btn" type="button">+ Nieuw kamp</button>
+    </div>
+  </header>
+
+  <div id="banner-slot"></div>
+  <div id="form-slot"></div>
+  <div id="camps-slot"></div>
+
+  <footer class="foot">Bergkamp — intern werkinstrument. Sjabloon met 9 fases, gebaseerd op Fundament.md. Afgeronde kampen staan in het <a href="archief.html">archief</a>, budget in <a href="budget.html">budget.html</a>.</footer>
+</div>
+
+<datalist id="begeleiders-list"></datalist>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var EMPTY_DRAFT = { name: "", type: "-18", customLabel: "", destination: "", startDate: "", endDate: "", transport: "", guides: "", camping: "", notes: "" };
+
+  var camps = [];
+  var steps = [];
+  var expandedIds = new Set();
+  var formOpen = false;
+  var formMode = "new"; // "new" | "edit"
+  var formCampId = null;
+  var formDraft = Object.assign({}, EMPTY_DRAFT);
+  var draftRestored = false;
+  var suspendRender = false;
+  var pendingRender = false;
+  var creatingCamp = false;
+  var connState = "connecting";
+  var lastError = "";
+  var pollTimer = null;
+
+  // Concept van een eerder geopend, niet-afgemaakt nieuw-kamp-formulier herstellen
+  // (enkel voor "nieuw kamp" — een lopende bewerking van een bestaand kamp
+  // wordt niet lokaal bewaard, dat zou bij het verkeerde kamp kunnen belanden).
+  var savedDraft = KV.loadDraft();
+  if (!KV.draftIsEmpty(savedDraft)) {
+    formDraft = Object.assign({}, EMPTY_DRAFT, savedDraft);
+    formOpen = true;
+    formMode = "new";
+    draftRestored = true;
+  }
+
+  function refresh() {
+    if (KV.SETUP_NEEDED) { render(); return Promise.resolve(); }
+    return KV.fetchAll().then(function (data) {
+      camps = data.camps; steps = data.steps;
+      connState = "ok"; lastError = "";
+      KV.renderBegeleiderDatalist(camps);
+      render();
+    }).catch(function (err) {
+      connState = "error"; lastError = err && err.message ? err.message : String(err);
+      render();
+    });
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () {
+      if (!suspendRender) refresh(); else pendingRender = true;
+    }, KV.CONFIG.POLL_MS);
+  }
+
+  function render() {
+    if (suspendRender) { pendingRender = true; return; }
+    renderConnStatus();
+    renderForm();
+    renderCamps();
+  }
+  function scheduleRenderAfterEdit() { if (pendingRender) { pendingRender = false; refresh(); } }
+
+  function renderConnStatus() {
+    var dot = document.getElementById("conn-dot");
+    var text = document.getElementById("conn-text");
+    var slot = document.getElementById("banner-slot");
+    if (KV.SETUP_NEEDED) {
+      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
+      KV.renderSetupBanner("banner-slot");
+      return;
+    }
+    if (connState === "connecting") { dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = ""; }
+    else if (connState === "error") { dot.className = "dot bad"; text.textContent = "Kan niet verbinden"; slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(lastError) + '). Controleer je internetverbinding en of de Web-app-link nog klopt. De pagina blijft het opnieuw proberen.</div>'; }
+    else { dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(KV.CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = ""; }
+  }
+
+  function renderForm() {
+    var slot = document.getElementById("form-slot");
+    var btn = document.getElementById("new-camp-btn");
+    btn.disabled = KV.SETUP_NEEDED;
+    if (!formOpen) { slot.innerHTML = ""; btn.textContent = "+ Nieuw kamp"; return; }
+    btn.textContent = formMode === "edit" ? "Sluiten" : "Annuleren";
+    var isCustom = formDraft.type === "custom";
+    var isEdit = formMode === "edit";
+    slot.innerHTML =
+      '<div class="new-camp-form">' +
+        '<h3>' + (isEdit ? "Kamp bewerken" : "Nieuw kamp toevoegen") + '</h3>' +
+        (draftRestored ? '<div class="draft-note">Concept hersteld van een vorige sessie. <button type="button" id="f-discard-draft">Leegmaken</button></div>' : '') +
+        '<div class="form-grid">' +
+          '<div class="form-field span2"><label for="f-name">Naam</label>' +
+            '<input id="f-name" type="text" placeholder="bv. -18-kamp 2027" value="' + KV.escapeHtml(formDraft.name) + '"></div>' +
+          '<div class="form-field"><label for="f-type">Type</label>' +
+            '<select id="f-type">' +
+              '<option value="-18"' + (formDraft.type === "-18" ? " selected" : "") + '>-18-kamp (augustus)</option>' +
+              '<option value="+18"' + (formDraft.type === "+18" ? " selected" : "") + '>+18-kamp (begin juli)</option>' +
+              '<option value="winter"' + (formDraft.type === "winter" ? " selected" : "") + '>Winterkamp (paasvakantie)</option>' +
+              '<option value="custom"' + (isCustom ? " selected" : "") + '>Ander type…</option>' +
+            '</select></div>' +
+          (isCustom ? '<div class="form-field"><label for="f-custom">Eigen type</label><input id="f-custom" type="text" placeholder="bv. Zomerkamp junioren" value="' + KV.escapeHtml(formDraft.customLabel) + '"></div>' : '<div class="form-field"><label for="f-dest">Bestemming</label><input id="f-dest" type="text" placeholder="bv. Frankrijk — Névache" value="' + KV.escapeHtml(formDraft.destination) + '"></div>') +
+          (isCustom ? '<div class="form-field"><label for="f-dest2">Bestemming</label><input id="f-dest2" type="text" placeholder="bv. Frankrijk — Névache" value="' + KV.escapeHtml(formDraft.destination) + '"></div>' : '') +
+          '<div class="form-field"><label for="f-start">Vertrekdatum</label><input id="f-start" type="date" value="' + KV.escapeHtml(formDraft.startDate) + '"></div>' +
+          '<div class="form-field"><label for="f-end">Terugkeerdatum</label><input id="f-end" type="date" value="' + KV.escapeHtml(formDraft.endDate) + '"></div>' +
+          '<div class="form-field"><label for="f-transport">Vervoer</label><input id="f-transport" type="text" placeholder="bv. 2 minibusjes klimzaal" value="' + KV.escapeHtml(formDraft.transport) + '"></div>' +
+          '<div class="form-field"><label for="f-guides">Begeleiders</label><input id="f-guides" type="text" placeholder="bv. Jochen, Wout" value="' + KV.escapeHtml(formDraft.guides) + '"></div>' +
+          '<div class="form-field"><label for="f-camping">Camping</label><input id="f-camping" type="text" placeholder="bv. Camping du Lac" value="' + KV.escapeHtml(formDraft.camping) + '"></div>' +
+          '<div class="form-field span2"><label for="f-notes">Notities</label><textarea id="f-notes" rows="3" placeholder="alles wat nog nergens anders past">' + KV.escapeHtml(formDraft.notes) + '</textarea></div>' +
+        '</div>' +
+        '<div class="form-actions">' +
+          '<button class="btn primary" id="f-submit" type="button"' + (creatingCamp ? " disabled" : "") + '>' + (creatingCamp ? "Bezig met opslaan…" : (isEdit ? "Wijzigingen opslaan" : "Kamp aanmaken (33 stappen)")) + '</button>' +
+          '<button class="btn" id="f-cancel" type="button">Annuleren</button>' +
+        '</div>' +
+      '</div>';
+
+    bindInput("f-name", function (v) { formDraft.name = v; persistDraft(); });
+    var typeSel = document.getElementById("f-type");
+    typeSel.addEventListener("change", function () { formDraft.type = typeSel.value; persistDraft(); render(); });
+    if (isCustom) {
+      bindInput("f-custom", function (v) { formDraft.customLabel = v; persistDraft(); });
+      bindInput("f-dest2", function (v) { formDraft.destination = v; persistDraft(); });
+    } else {
+      bindInput("f-dest", function (v) { formDraft.destination = v; persistDraft(); });
+    }
+    bindInput("f-start", function (v) { formDraft.startDate = v; persistDraft(); });
+    bindInput("f-end", function (v) { formDraft.endDate = v; persistDraft(); });
+    bindInput("f-transport", function (v) { formDraft.transport = v; persistDraft(); });
+    bindInput("f-guides", function (v) { formDraft.guides = v; persistDraft(); });
+    bindInput("f-camping", function (v) { formDraft.camping = v; persistDraft(); });
+    bindInput("f-notes", function (v) { formDraft.notes = v; persistDraft(); });
+    document.getElementById("f-submit").addEventListener("click", isEdit ? submitEditCamp : submitNewCamp);
+    document.getElementById("f-cancel").addEventListener("click", closeForm);
+    var discardBtn = document.getElementById("f-discard-draft");
+    if (discardBtn) discardBtn.addEventListener("click", function () {
+      formDraft = Object.assign({}, EMPTY_DRAFT);
+      draftRestored = false; KV.clearDraft(); render();
+    });
+  }
+
+  function closeForm() {
+    formOpen = false; draftRestored = false; formCampId = null; formMode = "new";
+    formDraft = Object.assign({}, EMPTY_DRAFT);
+    KV.clearDraft();
+    render();
+  }
+
+  function persistDraft() {
+    if (formMode !== "new") return;
+    draftRestored = false;
+    if (KV.draftIsEmpty(formDraft)) KV.clearDraft(); else KV.saveDraft(formDraft);
+  }
+
+  function bindInput(id, onInput) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", function () { onInput(el.value); });
+  }
+
+  function renderCamps() {
+    var active = camps.filter(function (c) { return !c.archived; });
+    active.sort(function (a, b) {
+      if (a.startDate && b.startDate) return a.startDate < b.startDate ? -1 : 1;
+      if (a.startDate) return -1;
+      if (b.startDate) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+    var slot = document.getElementById("camps-slot");
+    if (KV.SETUP_NEEDED) { slot.innerHTML = ""; }
+    else if (camps.length === 0 && connState === "ok") {
+      slot.innerHTML = '<div class="empty"><h3>Nog geen kampen</h3><p>Klik op "+ Nieuw kamp" om de voorbereiding van een eerste editie te starten. Elk kamp krijgt automatisch de standaard checklist van 9 fases.</p></div>';
+    } else if (active.length === 0 && connState === "ok") {
+      slot.innerHTML = '<div class="empty"><h3>Geen actieve kampen</h3><p>Alle kampen staan in het <a href="archief.html">archief</a>, of voeg een nieuw kamp toe.</p></div>';
+    } else if (connState !== "ok" && camps.length === 0) {
+      slot.innerHTML = "";
+    } else {
+      slot.innerHTML = '<div class="camps-section">' + active.map(function (c) {
+        return KV.renderCampCard(c, KV.stepsForCamp(steps, c.id), expandedIds.has(c.id));
+      }).join("") + '</div>';
+    }
+
+    active.forEach(function (camp) {
+      KV.bindCampCard(document, camp, {
+        onToggleExpand: function (id) { if (expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id); render(); },
+        onArchiveToggle: function (id, val) {
+          var c = camps.find(function (x) { return x.id === id; });
+          if (c) c.archived = val;
+          render();
+          KV.apiPost("updateCamp", { id: id, fields: { archived: val } }).catch(showApiError);
+        },
+        onDelete: requestDelete,
+        onEdit: openEditForm,
+        onSaved: refresh,
+        onError: showApiError
+      });
+    });
+  }
+
+  function openEditForm(camp) {
+    formMode = "edit";
+    formCampId = camp.id;
+    draftRestored = false;
+    formDraft = {
+      name: camp.name || "", type: camp.type || "-18", customLabel: camp.customLabel || "",
+      destination: camp.destination || "", startDate: camp.startDate || "", endDate: camp.endDate || "",
+      transport: camp.transport || "", guides: camp.guides || "",
+      camping: camp.camping || "", notes: camp.notes || ""
+    };
+    formOpen = true;
+    render();
+    var formEl = document.querySelector(".new-camp-form");
+    if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function submitEditCamp() {
+    if (KV.SETUP_NEEDED || !formCampId) return;
+    var name = formDraft.name.trim();
+    if (!name) { alert("Geef het kamp een naam."); return; }
+    if (formDraft.type === "custom" && !formDraft.customLabel.trim()) { alert("Vul het eigen type in."); return; }
+
+    var fields = {
+      name: name, type: formDraft.type,
+      customLabel: formDraft.type === "custom" ? formDraft.customLabel.trim() : "",
+      destination: formDraft.destination.trim(), startDate: formDraft.startDate || "",
+      endDate: formDraft.endDate || "", transport: formDraft.transport.trim(), guides: formDraft.guides.trim(),
+      camping: formDraft.camping.trim(), notes: formDraft.notes.trim()
+    };
+
+    // Optimistisch: meteen lokaal tonen en het formulier sluiten, niet wachten
+    // op de server — dat gaf de indruk dat bewerken "zeer lang" duurde, terwijl
+    // het gewoon op een volledige heen-en-terug (opslaan + herladen) wachtte.
+    var editedId = formCampId;
+    var camp = camps.find(function (c) { return c.id === editedId; });
+    if (camp) Object.assign(camp, fields);
+    closeForm();
+    KV.renderBegeleiderDatalist(camps);
+
+    KV.apiPost("updateCamp", { id: editedId, fields: fields }).catch(function (err) {
+      alert("Opslaan is mislukt: " + (err && err.message ? err.message : "onbekende fout") + ". De laatst bekende stand wordt opnieuw geladen.");
+      refresh();
+    });
+  }
+
+  function requestDelete(id, name) {
+    var ok = confirm('Kamp "' + name + '" en alle bijhorende stappen, inkomsten en uitgaven definitief verwijderen? Dit kan niet ongedaan gemaakt worden.');
+    if (!ok) return;
+    expandedIds.delete(id);
+    camps = camps.filter(function (c) { return c.id !== id; });
+    steps = steps.filter(function (s) { return s.campId !== id; });
+    render();
+    KV.apiPost("deleteCamp", { id: id }).catch(function (err) {
+      alert("Verwijderen is mislukt: " + (err && err.message ? err.message : "onbekende fout") + ". De laatst bekende stand wordt opnieuw geladen.");
+      refresh();
+    });
+  }
+
+  function showApiError(err) {
+    alert("Opslaan is niet gelukt: " + (err && err.message ? err.message : "onbekende fout") + ". De pagina toont zo dadelijk opnieuw de laatst bekende stand.");
+    refresh();
+  }
+
+  function submitNewCamp() {
+    if (KV.SETUP_NEEDED || creatingCamp) return;
+    var name = formDraft.name.trim();
+    if (!name) { alert("Geef het kamp een naam."); return; }
+    if (formDraft.type === "custom" && !formDraft.customLabel.trim()) { alert("Vul het eigen type in."); return; }
+    creatingCamp = true; render();
+
+    var campPayload = {
+      name: name, type: formDraft.type,
+      customLabel: formDraft.type === "custom" ? formDraft.customLabel.trim() : "",
+      destination: formDraft.destination.trim(), startDate: formDraft.startDate || "",
+      endDate: formDraft.endDate || "", transport: formDraft.transport.trim(), guides: formDraft.guides.trim(),
+      camping: formDraft.camping.trim(), notes: formDraft.notes.trim()
+    };
+
+    KV.apiPost("addCamp", campPayload).then(function (result) {
+      return KV.apiPost("addSteps", { campId: result.id, steps: KV.buildDefaultSteps() }).then(function () { return result.id; });
+    }).then(function (newId) {
+      expandedIds.add(newId);
+      creatingCamp = false;
+      closeForm();
+      return refresh();
+    }).catch(function (err) {
+      creatingCamp = false; render();
+      alert("Aanmaken van het kamp is mislukt: " + (err && err.message ? err.message : "onbekende fout") + ". Probeer opnieuw.");
+    });
+  }
+
+  document.addEventListener("focusin", function (e) {
+    if (e.target.matches && e.target.matches("input, select")) suspendRender = true;
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target.matches && e.target.matches("input, select")) { suspendRender = false; scheduleRenderAfterEdit(); }
+  });
+
+  document.getElementById("new-camp-btn").addEventListener("click", function () {
+    if (formOpen) { closeForm(); return; }
+    formMode = "new"; formCampId = null; draftRestored = false;
+    formOpen = true;
+    render();
+  });
+  document.getElementById("refresh-btn").addEventListener("click", function () { refresh(); });
+
+  render();
+  if (!KV.SETUP_NEEDED) { refresh().then(startPolling); }
+})();
+</script>

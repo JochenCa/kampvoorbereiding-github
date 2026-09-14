@@ -1,0 +1,325 @@
+<title>Budget — Kampvoorbereiding</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<div class="page">
+  <header class="top">
+    <div>
+      <div class="eyebrow"><span class="dot" id="conn-dot"></span><span id="conn-text">Verbinden…</span></div>
+      <h1>Budget</h1>
+      <p class="dek">Inkomsten en uitgaven per kamp. Kasticket fotograferen/uploaden kan rechtstreeks vanaf de gsm; bedrag en categorie kies je zelf.</p>
+      <a class="top-link" href="kampvoorbereiding.html">← Actieve kampen</a>
+      <a class="top-link" href="archief.html">→ Archief</a>
+    </div>
+    <div class="head-actions">
+      <button class="btn icon" id="refresh-btn" type="button" title="Nu vernieuwen">↻</button>
+    </div>
+  </header>
+
+  <div id="banner-slot"></div>
+  <div id="camps-slot"></div>
+
+  <footer class="foot">Bergkamp — intern werkinstrument. Kasticketfoto's staan in de Drive-map "Kampvoorbereiding - Kasticketten".</footer>
+</div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var camps = [];
+  var income = [];
+  var expenses = [];
+  var expandedIds = new Set();
+  var incomeDrafts = {};   // campId -> { amount, description, date }
+  var expenseDrafts = {};  // campId -> { amount, category, customCategory, description, date, fileBase64, fileMimeType, fileLabel }
+  var busyCampIds = new Set(); // campId's die net een upload/opslag aan het verwerken zijn
+  var suspendRender = false;
+  var pendingRender = false;
+  var connState = "connecting";
+  var lastError = "";
+  var pollTimer = null;
+  var autoExpandDone = false; // klapt bij het allereerste laden alle kampen open, zodat de "toevoegen"-vakken meteen zichtbaar zijn
+
+  function emptyIncomeDraft() { return { amount: "", description: "", date: KV.todayStr() }; }
+  function emptyExpenseDraft() { return { amount: "", category: "Boodschappen", customCategory: "", description: "", date: KV.todayStr(), fileBase64: "", fileMimeType: "", fileLabel: "" }; }
+  function draftFor(map, campId, maker) { if (!map[campId]) map[campId] = maker(); return map[campId]; }
+
+  function refresh() {
+    if (KV.SETUP_NEEDED) { render(); return Promise.resolve(); }
+    return KV.fetchAll().then(function (data) {
+      camps = data.camps; income = data.income; expenses = data.expenses;
+      connState = "ok"; lastError = "";
+      if (!autoExpandDone && camps.length) {
+        camps.forEach(function (c) { expandedIds.add(c.id); });
+        autoExpandDone = true;
+      }
+      render();
+    }).catch(function (err) {
+      connState = "error"; lastError = err && err.message ? err.message : String(err);
+      render();
+    });
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () {
+      if (!suspendRender) refresh(); else pendingRender = true;
+    }, KV.CONFIG.POLL_MS);
+  }
+
+  function render() {
+    if (suspendRender) { pendingRender = true; return; }
+    renderConnStatus();
+    renderCamps();
+  }
+  function scheduleRenderAfterEdit() { if (pendingRender) { pendingRender = false; refresh(); } }
+
+  function renderConnStatus() {
+    var dot = document.getElementById("conn-dot");
+    var text = document.getElementById("conn-text");
+    var slot = document.getElementById("banner-slot");
+    if (KV.SETUP_NEEDED) {
+      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
+      KV.renderSetupBanner("banner-slot");
+      return;
+    }
+    if (connState === "connecting") { dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = ""; }
+    else if (connState === "error") { dot.className = "dot bad"; text.textContent = "Kan niet verbinden"; slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(lastError) + '). Controleer je internetverbinding en of de Web-app-link nog klopt.</div>'; }
+    else { dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(KV.CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = ""; }
+  }
+
+  function campTotals(campId) {
+    var inc = income.filter(function (i) { return i.campId === campId; }).reduce(function (s, i) { return s + i.amount; }, 0);
+    var exp = expenses.filter(function (x) { return x.campId === campId; }).reduce(function (s, x) { return s + x.amount; }, 0);
+    return { income: inc, expenses: exp, balance: inc - exp };
+  }
+
+  function renderCamps() {
+    var slot = document.getElementById("camps-slot");
+    if (KV.SETUP_NEEDED) { slot.innerHTML = ""; return; }
+    if (camps.length === 0 && connState === "ok") {
+      slot.innerHTML = '<div class="empty"><h3>Nog geen kampen</h3><p>Maak eerst een kamp aan op de <a href="kampvoorbereiding.html">hoofdpagina</a> — daarna verschijnt het hier met zijn eigen budget.</p></div>';
+      return;
+    }
+    var sorted = camps.slice().sort(function (a, b) {
+      if (a.archived !== b.archived) return a.archived ? 1 : -1;
+      if (a.startDate && b.startDate) return a.startDate < b.startDate ? -1 : 1;
+      if (a.startDate) return -1;
+      if (b.startDate) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+    slot.innerHTML = '<div class="camps-section">' + sorted.map(renderCampBudgetCard).join("") + '</div>';
+    sorted.forEach(bindCampBudgetCard);
+  }
+
+  function renderCampBudgetCard(camp) {
+    var t = campTotals(camp.id);
+    var expanded = expandedIds.has(camp.id);
+    return '<article class="camp' + (camp.archived ? " is-archived" : "") + '" data-camp-id="' + camp.id + '">' +
+      '<button type="button" class="camp-head" data-toggle="' + camp.id + '">' +
+        '<div>' +
+          '<div class="camp-title-row"><h3>' + KV.escapeHtml(camp.name) + '</h3><span class="pill">' + KV.escapeHtml(KV.typeLabel(camp)) + '</span>' + (camp.archived ? '<span class="pill">archief</span>' : '') + '</div>' +
+          '<div class="camp-sub"><span>Inkomsten ' + KV.formatEUR(t.income) + '</span><span>Uitgaven ' + KV.formatEUR(t.expenses) + '</span></div>' +
+        '</div>' +
+        '<div class="progress-wrap"><span class="progress-label" style="font-size:14px;color:' + (t.balance < 0 ? 'var(--bad)' : 'var(--good)') + '">' + KV.formatEUR(t.balance) + '</span></div>' +
+        '<span class="chevron">' + (expanded ? "▾" : "▸") + '</span>' +
+      '</button>' +
+      (expanded ? renderCampBudgetBody(camp, t) : '') +
+    '</article>';
+  }
+
+  function renderCampBudgetBody(camp, t) {
+    var incRows = income.filter(function (i) { return i.campId === camp.id; }).sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+    var expRows = expenses.filter(function (x) { return x.campId === camp.id; }).sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+    var iDraft = draftFor(incomeDrafts, camp.id, emptyIncomeDraft);
+    var eDraft = draftFor(expenseDrafts, camp.id, emptyExpenseDraft);
+    var busy = busyCampIds.has(camp.id);
+
+    return '<div class="camp-body">' +
+      '<div class="budget-stats">' +
+        '<div class="stat-tile"><span class="n good">' + KV.formatEUR(t.income) + '</span><span class="l">Inkomsten</span></div>' +
+        '<div class="stat-tile"><span class="n">' + KV.formatEUR(t.expenses) + '</span><span class="l">Uitgaven</span></div>' +
+        '<div class="stat-tile"><span class="n ' + (t.balance < 0 ? 'bad' : 'good') + '">' + KV.formatEUR(t.balance) + '</span><span class="l">Saldo</span></div>' +
+      '</div>' +
+
+      '<div class="money-section">' +
+        '<h4>Inkomsten</h4>' +
+        '<ul class="money-list">' + (incRows.length ? incRows.map(renderIncomeRow).join("") : '<li class="money-empty">Nog geen inkomsten geregistreerd.</li>') + '</ul>' +
+        '<div class="money-add-box">' +
+          '<div class="money-add-title">+ Nieuwe inkomst</div>' +
+          '<div class="money-form" data-income-form="' + camp.id + '">' +
+            '<div class="mf-field"><label>Bedrag (€)</label><input type="number" step="0.01" min="0" data-inc-amount value="' + KV.escapeHtml(iDraft.amount) + '" placeholder="0,00"></div>' +
+            '<div class="mf-field"><label>Omschrijving</label><input type="text" data-inc-desc value="' + KV.escapeHtml(iDraft.description) + '" placeholder="bv. bijdrage klimzaal"></div>' +
+            '<div class="mf-field"><label>Datum</label><input type="date" data-inc-date value="' + KV.escapeHtml(iDraft.date) + '"></div>' +
+            '<button type="button" class="btn small primary" data-add-income="' + camp.id + '"' + (busy ? " disabled" : "") + '>Toevoegen</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="money-section">' +
+        '<h4>Uitgaven</h4>' +
+        '<ul class="money-list">' + (expRows.length ? expRows.map(renderExpenseRow).join("") : '<li class="money-empty">Nog geen uitgaven geregistreerd.</li>') + '</ul>' +
+        '<div class="money-add-box">' +
+          '<div class="money-add-title">+ Nieuwe uitgave (bv. kasticket)</div>' +
+          '<div class="money-form" data-expense-form="' + camp.id + '">' +
+            '<div class="mf-field"><label>Bedrag (€)</label><input type="number" step="0.01" min="0" data-exp-amount value="' + KV.escapeHtml(eDraft.amount) + '" placeholder="0,00"></div>' +
+            '<div class="mf-field"><label>Categorie</label><select data-exp-category>' +
+              KV.EXPENSE_CATEGORIES.map(function (c) { return '<option value="' + KV.escapeHtml(c) + '"' + (eDraft.category === c ? " selected" : "") + '>' + KV.escapeHtml(c) + '</option>'; }).join("") +
+            '</select></div>' +
+            '<div class="mf-field"><label>Datum</label><input type="date" data-exp-date value="' + KV.escapeHtml(eDraft.date) + '"></div>' +
+            '<button type="button" class="btn small primary" data-add-expense="' + camp.id + '"' + (busy ? " disabled" : "") + '>' + (busy ? "Bezig…" : "Toevoegen") + '</button>' +
+            (eDraft.category === "Andere" ? '<div class="mf-field span2" style="grid-column:1/3"><label>Eigen categorie</label><input type="text" data-exp-custom-category value="' + KV.escapeHtml(eDraft.customCategory) + '" placeholder="bv. Verzekering"></div>' : '') +
+            '<div class="mf-wide">' +
+              '<div class="mf-field"><label>Omschrijving</label><input type="text" data-exp-desc value="' + KV.escapeHtml(eDraft.description) + '" placeholder="bv. Carrefour, eerste dagen"></div>' +
+              '<div class="mf-field"><label>Kasticket (foto)</label><input type="file" accept="image/*" capture="environment" data-exp-file>' +
+                (eDraft.fileLabel ? '<span style="font-size:11.5px;color:var(--good)">foto gekozen: ' + KV.escapeHtml(eDraft.fileLabel) + '</span>' : '') +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderIncomeRow(row) {
+    return '<li class="money-row">' +
+      '<span class="amt">' + KV.formatEUR(row.amount) + '</span>' +
+      '<span class="desc">' + KV.escapeHtml(row.description || "—") + ' · ' + KV.escapeHtml(row.date || "") + '</span>' +
+      '<span></span>' +
+      '<button type="button" class="del" data-del-income="' + row.id + '" title="Verwijderen">×</button>' +
+    '</li>';
+  }
+
+  function renderExpenseRow(row) {
+    var cat = row.category === "Andere" && row.customCategory ? row.customCategory : row.category;
+    return '<li class="money-row">' +
+      '<span class="amt">' + KV.formatEUR(row.amount) + '</span>' +
+      '<span class="desc"><span class="cat">' + KV.escapeHtml(cat || "") + '</span>' + (row.description ? ' — ' + KV.escapeHtml(row.description) : '') + ' · ' + KV.escapeHtml(row.date || "") + '</span>' +
+      (row.receiptUrl ? '<a class="receipt" href="' + KV.escapeHtml(row.receiptUrl) + '" target="_blank" rel="noopener">ticket</a>' : '<span></span>') +
+      '<button type="button" class="del" data-del-expense="' + row.id + '" title="Verwijderen">×</button>' +
+    '</li>';
+  }
+
+  function bindCampBudgetCard(camp) {
+    var card = document.querySelector('.camp[data-camp-id="' + KV.cssEscape(camp.id) + '"]');
+    if (!card) return;
+    var head = card.querySelector('[data-toggle]');
+    if (head) head.addEventListener("click", function () {
+      if (expandedIds.has(camp.id)) expandedIds.delete(camp.id); else expandedIds.add(camp.id);
+      render();
+    });
+
+    card.querySelectorAll('[data-del-income]').forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!confirm("Deze inkomst verwijderen?")) return;
+        var id = btn.getAttribute("data-del-income");
+        income = income.filter(function (i) { return i.id !== id; });
+        render();
+        KV.apiPost("deleteIncome", { id: id }).catch(function (err) { showApiError(err); });
+      });
+    });
+    card.querySelectorAll('[data-del-expense]').forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!confirm("Deze uitgave (en het bijhorende kasticket) verwijderen?")) return;
+        var id = btn.getAttribute("data-del-expense");
+        expenses = expenses.filter(function (x) { return x.id !== id; });
+        render();
+        KV.apiPost("deleteExpense", { id: id }).catch(function (err) { showApiError(err); });
+      });
+    });
+
+    var iDraft = incomeDrafts[camp.id];
+    if (iDraft) {
+      bindVal(card, '[data-inc-amount]', function (v) { iDraft.amount = v; });
+      bindVal(card, '[data-inc-desc]', function (v) { iDraft.description = v; });
+      bindVal(card, '[data-inc-date]', function (v) { iDraft.date = v; });
+      var addIncBtn = card.querySelector('[data-add-income]');
+      if (addIncBtn) addIncBtn.addEventListener("click", function () { submitIncome(camp.id); });
+    }
+
+    var eDraft = expenseDrafts[camp.id];
+    if (eDraft) {
+      bindVal(card, '[data-exp-amount]', function (v) { eDraft.amount = v; });
+      var catSel = card.querySelector('[data-exp-category]');
+      if (catSel) catSel.addEventListener("change", function () { eDraft.category = catSel.value; render(); });
+      bindVal(card, '[data-exp-custom-category]', function (v) { eDraft.customCategory = v; });
+      bindVal(card, '[data-exp-desc]', function (v) { eDraft.description = v; });
+      bindVal(card, '[data-exp-date]', function (v) { eDraft.date = v; });
+      var fileInp = card.querySelector('[data-exp-file]');
+      if (fileInp) fileInp.addEventListener("change", function () {
+        var file = fileInp.files && fileInp.files[0];
+        if (!file) return;
+        eDraft.fileLabel = "bezig met verwerken…";
+        KV.compressImageFile(file, 1400, 0.75).then(function (res) {
+          eDraft.fileBase64 = res.base64; eDraft.fileMimeType = res.mimeType; eDraft.fileLabel = file.name;
+          render();
+        }).catch(function (err) {
+          eDraft.fileLabel = ""; eDraft.fileBase64 = "";
+          alert("Kon de foto niet verwerken: " + (err && err.message ? err.message : "onbekende fout"));
+          render();
+        });
+      });
+      var addExpBtn = card.querySelector('[data-add-expense]');
+      if (addExpBtn) addExpBtn.addEventListener("click", function () { submitExpense(camp.id); });
+    }
+  }
+
+  function bindVal(root, selector, onInput) {
+    var el = root.querySelector(selector);
+    if (!el) return;
+    el.addEventListener("input", function () { onInput(el.value); });
+  }
+
+  function submitIncome(campId) {
+    var d = incomeDrafts[campId];
+    var amount = parseFloat((d.amount || "").toString().replace(",", "."));
+    if (!amount || amount <= 0) { alert("Vul een geldig bedrag in."); return; }
+    busyCampIds.add(campId); render();
+    KV.apiPost("addIncome", { campId: campId, amount: amount, description: d.description.trim(), date: d.date || KV.todayStr() }).then(function () {
+      delete incomeDrafts[campId];
+      busyCampIds.delete(campId);
+      return refresh();
+    }).catch(function (err) {
+      busyCampIds.delete(campId);
+      showApiError(err);
+    });
+  }
+
+  function submitExpense(campId) {
+    var d = expenseDrafts[campId];
+    var amount = parseFloat((d.amount || "").toString().replace(",", "."));
+    if (!amount || amount <= 0) { alert("Vul een geldig bedrag in."); return; }
+    if (d.category === "Andere" && !d.customCategory.trim()) { alert("Vul de eigen categorie in."); return; }
+    busyCampIds.add(campId); render();
+    KV.apiPost("addExpense", {
+      campId: campId, amount: amount, category: d.category, customCategory: d.category === "Andere" ? d.customCategory.trim() : "",
+      description: d.description.trim(), date: d.date || KV.todayStr(),
+      receiptBase64: d.fileBase64 || "", receiptMimeType: d.fileMimeType || ""
+    }).then(function () {
+      delete expenseDrafts[campId];
+      busyCampIds.delete(campId);
+      return refresh();
+    }).catch(function (err) {
+      busyCampIds.delete(campId);
+      showApiError(err);
+    });
+  }
+
+  function showApiError(err) {
+    alert("Opslaan is niet gelukt: " + (err && err.message ? err.message : "onbekende fout") + ". De pagina toont zo dadelijk opnieuw de laatst bekende stand.");
+    refresh();
+  }
+
+  document.addEventListener("focusin", function (e) {
+    if (e.target.matches && e.target.matches("input, select")) suspendRender = true;
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target.matches && e.target.matches("input, select")) { suspendRender = false; scheduleRenderAfterEdit(); }
+  });
+  document.getElementById("refresh-btn").addEventListener("click", function () { refresh(); });
+
+  render();
+  if (!KV.SETUP_NEEDED) { refresh().then(startPolling); }
+})();
+</script>

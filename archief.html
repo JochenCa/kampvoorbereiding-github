@@ -1,0 +1,256 @@
+<title>Archief — Kampvoorbereiding</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<div class="page">
+  <header class="top">
+    <div>
+      <div class="eyebrow"><span class="dot" id="conn-dot"></span><span id="conn-text">Verbinden…</span></div>
+      <h1>Archief</h1>
+      <p class="dek">Afgeronde kampeditie. Nog altijd volledig aan te vullen — archiveren betekent enkel "niet meer actief plannen", niet "afgesloten voor wijzigingen".</p>
+      <a class="top-link" href="kampvoorbereiding.html">← Terug naar actieve kampen</a>
+      <a class="top-link" href="budget.html">→ Budget: inkomsten &amp; uitgaven invoegen</a>
+    </div>
+    <div class="head-actions">
+      <button class="btn icon" id="refresh-btn" type="button" title="Nu vernieuwen">↻</button>
+    </div>
+  </header>
+
+  <div id="banner-slot"></div>
+  <div id="form-slot"></div>
+  <div id="camps-slot"></div>
+
+  <footer class="foot">Bergkamp — intern werkinstrument. Zie <a href="kampvoorbereiding.html">Kampvoorbereiding</a> voor actieve kampen.</footer>
+</div>
+
+<datalist id="begeleiders-list"></datalist>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var EMPTY_DRAFT = { name: "", type: "-18", customLabel: "", destination: "", startDate: "", endDate: "", transport: "", guides: "", camping: "", notes: "" };
+
+  var camps = [];
+  var steps = [];
+  var expandedIds = new Set();
+  var formOpen = false;
+  var formCampId = null;
+  var formDraft = Object.assign({}, EMPTY_DRAFT);
+  var savingCamp = false;
+  var suspendRender = false;
+  var pendingRender = false;
+  var connState = "connecting";
+  var lastError = "";
+  var pollTimer = null;
+
+  function refresh() {
+    if (KV.SETUP_NEEDED) { render(); return Promise.resolve(); }
+    return KV.fetchAll().then(function (data) {
+      camps = data.camps; steps = data.steps;
+      connState = "ok"; lastError = "";
+      KV.renderBegeleiderDatalist(camps);
+      render();
+    }).catch(function (err) {
+      connState = "error"; lastError = err && err.message ? err.message : String(err);
+      render();
+    });
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () {
+      if (!suspendRender) refresh(); else pendingRender = true;
+    }, KV.CONFIG.POLL_MS);
+  }
+
+  function render() {
+    if (suspendRender) { pendingRender = true; return; }
+    renderConnStatus();
+    renderForm();
+    renderCamps();
+  }
+  function scheduleRenderAfterEdit() { if (pendingRender) { pendingRender = false; refresh(); } }
+
+  function renderConnStatus() {
+    var dot = document.getElementById("conn-dot");
+    var text = document.getElementById("conn-text");
+    var slot = document.getElementById("banner-slot");
+    if (KV.SETUP_NEEDED) {
+      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
+      KV.renderSetupBanner("banner-slot");
+      return;
+    }
+    if (connState === "connecting") { dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = ""; }
+    else if (connState === "error") { dot.className = "dot bad"; text.textContent = "Kan niet verbinden"; slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(lastError) + '). Controleer je internetverbinding en of de Web-app-link nog klopt.</div>'; }
+    else { dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(KV.CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = ""; }
+  }
+
+  function renderForm() {
+    var slot = document.getElementById("form-slot");
+    if (!formOpen) { slot.innerHTML = ""; return; }
+    var isCustom = formDraft.type === "custom";
+    slot.innerHTML =
+      '<div class="new-camp-form">' +
+        '<h3>Kamp bewerken</h3>' +
+        '<div class="form-grid">' +
+          '<div class="form-field span2"><label for="f-name">Naam</label>' +
+            '<input id="f-name" type="text" value="' + KV.escapeHtml(formDraft.name) + '"></div>' +
+          '<div class="form-field"><label for="f-type">Type</label>' +
+            '<select id="f-type">' +
+              '<option value="-18"' + (formDraft.type === "-18" ? " selected" : "") + '>-18-kamp (augustus)</option>' +
+              '<option value="+18"' + (formDraft.type === "+18" ? " selected" : "") + '>+18-kamp (begin juli)</option>' +
+              '<option value="winter"' + (formDraft.type === "winter" ? " selected" : "") + '>Winterkamp (paasvakantie)</option>' +
+              '<option value="custom"' + (isCustom ? " selected" : "") + '>Ander type…</option>' +
+            '</select></div>' +
+          (isCustom ? '<div class="form-field"><label for="f-custom">Eigen type</label><input id="f-custom" type="text" value="' + KV.escapeHtml(formDraft.customLabel) + '"></div>' : '<div class="form-field"><label for="f-dest">Bestemming</label><input id="f-dest" type="text" value="' + KV.escapeHtml(formDraft.destination) + '"></div>') +
+          (isCustom ? '<div class="form-field"><label for="f-dest2">Bestemming</label><input id="f-dest2" type="text" value="' + KV.escapeHtml(formDraft.destination) + '"></div>' : '') +
+          '<div class="form-field"><label for="f-start">Vertrekdatum</label><input id="f-start" type="date" value="' + KV.escapeHtml(formDraft.startDate) + '"></div>' +
+          '<div class="form-field"><label for="f-end">Terugkeerdatum</label><input id="f-end" type="date" value="' + KV.escapeHtml(formDraft.endDate) + '"></div>' +
+          '<div class="form-field"><label for="f-transport">Vervoer</label><input id="f-transport" type="text" value="' + KV.escapeHtml(formDraft.transport) + '"></div>' +
+          '<div class="form-field"><label for="f-guides">Begeleiders</label><input id="f-guides" type="text" value="' + KV.escapeHtml(formDraft.guides) + '"></div>' +
+          '<div class="form-field"><label for="f-camping">Camping</label><input id="f-camping" type="text" value="' + KV.escapeHtml(formDraft.camping) + '"></div>' +
+          '<div class="form-field span2"><label for="f-notes">Notities</label><textarea id="f-notes" rows="3">' + KV.escapeHtml(formDraft.notes) + '</textarea></div>' +
+        '</div>' +
+        '<div class="form-actions">' +
+          '<button class="btn primary" id="f-submit" type="button"' + (savingCamp ? " disabled" : "") + '>' + (savingCamp ? "Bezig met opslaan…" : "Wijzigingen opslaan") + '</button>' +
+          '<button class="btn" id="f-cancel" type="button">Annuleren</button>' +
+        '</div>' +
+      '</div>';
+
+    bindInput("f-name", function (v) { formDraft.name = v; });
+    var typeSel = document.getElementById("f-type");
+    typeSel.addEventListener("change", function () { formDraft.type = typeSel.value; render(); });
+    if (isCustom) {
+      bindInput("f-custom", function (v) { formDraft.customLabel = v; });
+      bindInput("f-dest2", function (v) { formDraft.destination = v; });
+    } else {
+      bindInput("f-dest", function (v) { formDraft.destination = v; });
+    }
+    bindInput("f-start", function (v) { formDraft.startDate = v; });
+    bindInput("f-end", function (v) { formDraft.endDate = v; });
+    bindInput("f-transport", function (v) { formDraft.transport = v; });
+    bindInput("f-guides", function (v) { formDraft.guides = v; });
+    bindInput("f-camping", function (v) { formDraft.camping = v; });
+    bindInput("f-notes", function (v) { formDraft.notes = v; });
+    document.getElementById("f-submit").addEventListener("click", submitEditCamp);
+    document.getElementById("f-cancel").addEventListener("click", closeForm);
+  }
+
+  function closeForm() {
+    formOpen = false; formCampId = null;
+    formDraft = Object.assign({}, EMPTY_DRAFT);
+    render();
+  }
+
+  function bindInput(id, onInput) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", function () { onInput(el.value); });
+  }
+
+  function renderCamps() {
+    var archived = camps.filter(function (c) { return c.archived; });
+    archived.sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); });
+
+    var slot = document.getElementById("camps-slot");
+    if (KV.SETUP_NEEDED) { slot.innerHTML = ""; }
+    else if (archived.length === 0 && connState === "ok") {
+      slot.innerHTML = '<div class="empty"><h3>Archief is leeg</h3><p>Zodra je op de <a href="kampvoorbereiding.html">hoofdpagina</a> een kamp archiveert, verschijnt het hier.</p></div>';
+    } else if (connState !== "ok" && camps.length === 0) {
+      slot.innerHTML = "";
+    } else {
+      slot.innerHTML = '<div class="camps-section">' + archived.map(function (c) {
+        return KV.renderCampCard(c, KV.stepsForCamp(steps, c.id), expandedIds.has(c.id));
+      }).join("") + '</div>';
+    }
+
+    archived.forEach(function (camp) {
+      KV.bindCampCard(document, camp, {
+        onToggleExpand: function (id) { if (expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id); render(); },
+        onArchiveToggle: function (id, val) {
+          var c = camps.find(function (x) { return x.id === id; });
+          if (c) c.archived = val;
+          render();
+          KV.apiPost("updateCamp", { id: id, fields: { archived: val } }).catch(showApiError);
+        },
+        onDelete: requestDelete,
+        onEdit: openEditForm,
+        onSaved: refresh,
+        onError: showApiError
+      });
+    });
+  }
+
+  function openEditForm(camp) {
+    formCampId = camp.id;
+    formDraft = {
+      name: camp.name || "", type: camp.type || "-18", customLabel: camp.customLabel || "",
+      destination: camp.destination || "", startDate: camp.startDate || "", endDate: camp.endDate || "",
+      transport: camp.transport || "", guides: camp.guides || "",
+      camping: camp.camping || "", notes: camp.notes || ""
+    };
+    formOpen = true;
+    render();
+    var formEl = document.querySelector(".new-camp-form");
+    if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function submitEditCamp() {
+    if (KV.SETUP_NEEDED || !formCampId) return;
+    var name = formDraft.name.trim();
+    if (!name) { alert("Geef het kamp een naam."); return; }
+    if (formDraft.type === "custom" && !formDraft.customLabel.trim()) { alert("Vul het eigen type in."); return; }
+
+    var fields = {
+      name: name, type: formDraft.type,
+      customLabel: formDraft.type === "custom" ? formDraft.customLabel.trim() : "",
+      destination: formDraft.destination.trim(), startDate: formDraft.startDate || "",
+      endDate: formDraft.endDate || "", transport: formDraft.transport.trim(), guides: formDraft.guides.trim(),
+      camping: formDraft.camping.trim(), notes: formDraft.notes.trim()
+    };
+
+    // Optimistisch: meteen lokaal tonen en sluiten, niet wachten op de server.
+    var editedId = formCampId;
+    var camp = camps.find(function (c) { return c.id === editedId; });
+    if (camp) Object.assign(camp, fields);
+    closeForm();
+    KV.renderBegeleiderDatalist(camps);
+
+    KV.apiPost("updateCamp", { id: editedId, fields: fields }).catch(function (err) {
+      alert("Opslaan is mislukt: " + (err && err.message ? err.message : "onbekende fout") + ". De laatst bekende stand wordt opnieuw geladen.");
+      refresh();
+    });
+  }
+
+  function requestDelete(id, name) {
+    var ok = confirm('Kamp "' + name + '" en alle bijhorende stappen, inkomsten en uitgaven definitief verwijderen? Dit kan niet ongedaan gemaakt worden.');
+    if (!ok) return;
+    expandedIds.delete(id);
+    camps = camps.filter(function (c) { return c.id !== id; });
+    steps = steps.filter(function (s) { return s.campId !== id; });
+    render();
+    KV.apiPost("deleteCamp", { id: id }).catch(function (err) {
+      alert("Verwijderen is mislukt: " + (err && err.message ? err.message : "onbekende fout") + ". De laatst bekende stand wordt opnieuw geladen.");
+      refresh();
+    });
+  }
+
+  function showApiError(err) {
+    alert("Opslaan is niet gelukt: " + (err && err.message ? err.message : "onbekende fout") + ". De pagina toont zo dadelijk opnieuw de laatst bekende stand.");
+    refresh();
+  }
+
+  document.addEventListener("focusin", function (e) {
+    if (e.target.matches && e.target.matches("input, select")) suspendRender = true;
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target.matches && e.target.matches("input, select")) { suspendRender = false; scheduleRenderAfterEdit(); }
+  });
+  document.getElementById("refresh-btn").addEventListener("click", function () { refresh(); });
+
+  render();
+  if (!KV.SETUP_NEEDED) { refresh().then(startPolling); }
+})();
+</script>

@@ -1,0 +1,147 @@
+<title>Kampfiche</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  .fiche-page{ max-width: 780px; margin: 0 auto; padding: 32px 24px 80px; }
+  .fiche-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom: 24px; }
+  .fiche-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 32px; }
+  .fiche-title{ font-size: 28px; margin-bottom: 4px; }
+  .fiche-sub{ color: var(--ink-soft); font-size: 14px; margin-bottom: 24px; }
+  .fiche-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; margin-bottom: 24px; }
+  .fiche-field{ border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  .fiche-field .l{ font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing:.05em; color: var(--ink-soft); display:block; margin-bottom:3px; }
+  .fiche-field .v{ font-size: 15px; }
+  .fiche-section{ margin-top: 26px; }
+  .fiche-section h3{ font-size: 13px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing:.05em; color: var(--accent); border-bottom: 1px solid var(--line-strong); padding-bottom: 6px; margin-bottom: 12px; }
+  .fiche-phases{ display:grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .fiche-phase-row{ display:flex; justify-content:space-between; font-size: 14px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .fiche-budget{ display:grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow:hidden; }
+  .fiche-budget div{ background: var(--surface); padding: 12px 14px; }
+  .fiche-budget .n{ font-family: var(--font-mono); font-size: 18px; display:block; }
+  .fiche-budget .l{ font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing:.04em; font-family: var(--font-mono); }
+  .fiche-notes{ white-space: pre-wrap; font-size: 14px; }
+  .fiche-picker ul{ list-style:none; margin:0; padding:0; }
+  .fiche-picker li a{ display:block; padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; }
+  @media print {
+    .no-print{ display:none !important; }
+    body{ background: #fff; }
+    .fiche-page{ max-width: none; padding: 0; }
+    .fiche-card{ border: none; padding: 0; background: #fff; }
+    :root{ --ink: #000; --ink-soft: #444; --surface: #fff; --line: #ccc; --line-strong: #999; --accent: #000; }
+  }
+</style>
+
+<div class="fiche-page">
+  <div class="fiche-head no-print">
+    <div>
+      <div class="eyebrow"><span class="dot" id="conn-dot"></span><span id="conn-text">Verbinden…</span></div>
+      <a class="top-link" href="kampvoorbereiding.html" style="margin-top:0">← Terug naar Kampvoorbereiding</a>
+    </div>
+    <button class="btn primary" id="print-btn" type="button">Afdrukken</button>
+  </div>
+  <div id="banner-slot" class="no-print"></div>
+  <div id="fiche-slot"></div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var campId = new URLSearchParams(location.search).get("id");
+  var camps = [], steps = [], income = [], expenses = [];
+
+  function refresh() {
+    if (KV.SETUP_NEEDED) { renderSetupNeeded(); return; }
+    KV.fetchAll().then(function (data) {
+      camps = data.camps; steps = data.steps; income = data.income; expenses = data.expenses;
+      document.getElementById("conn-dot").className = "dot ok";
+      document.getElementById("conn-text").textContent = "Verbonden";
+      render();
+    }).catch(function (err) {
+      document.getElementById("conn-dot").className = "dot bad";
+      document.getElementById("conn-text").textContent = "Kan niet verbinden";
+      document.getElementById("banner-slot").innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(err && err.message ? err.message : String(err)) + ').</div>';
+    });
+  }
+
+  function renderSetupNeeded() {
+    document.getElementById("conn-dot").className = "dot bad";
+    document.getElementById("conn-text").textContent = "Nog niet ingesteld";
+    KV.renderSetupBanner("banner-slot");
+  }
+
+  function render() {
+    var slot = document.getElementById("fiche-slot");
+    var camp = camps.find(function (c) { return c.id === campId; });
+    if (!camp) {
+      slot.innerHTML = '<div class="fiche-card fiche-picker"><h3>Kies een kamp</h3><p style="color:var(--ink-soft);font-size:13.5px">' +
+        (campId ? "Geen kamp gevonden met dit ID — misschien verwijderd?" : "Deze pagina werd zonder kamp geopend.") +
+        ' Kies hieronder een kamp om de fiche van te zien.</p><ul>' +
+        camps.map(function (c) { return '<li><a href="fiche.html?id=' + encodeURIComponent(c.id) + '">' + KV.escapeHtml(c.name) + '</a></li>'; }).join("") +
+      '</ul></div>';
+      return;
+    }
+    document.title = "Kampfiche — " + camp.name;
+
+    var campSteps = KV.stepsForCamp(steps, camp.id);
+    var byPhase = {}, phaseOrder = [];
+    campSteps.forEach(function (s) {
+      if (!byPhase[s.phase]) { byPhase[s.phase] = []; phaseOrder.push(s.phase); }
+      byPhase[s.phase].push(s);
+    });
+    var totalDone = campSteps.filter(function (s) { return s.done; }).length;
+
+    var incTotal = income.filter(function (i) { return i.campId === camp.id; }).reduce(function (s, i) { return s + i.amount; }, 0);
+    var expTotal = expenses.filter(function (x) { return x.campId === camp.id; }).reduce(function (s, x) { return s + x.amount; }, 0);
+    var balance = incTotal - expTotal;
+
+    var range = "";
+    if (camp.startDate) range = camp.startDate + (camp.endDate ? " → " + camp.endDate : "");
+
+    function field(label, value) {
+      if (!value) return "";
+      return '<div class="fiche-field"><span class="l">' + KV.escapeHtml(label) + '</span><span class="v">' + KV.escapeHtml(value) + '</span></div>';
+    }
+
+    slot.innerHTML =
+      '<div class="fiche-card">' +
+        '<h1 class="fiche-title">' + KV.escapeHtml(camp.name) + '</h1>' +
+        '<div class="fiche-sub">' + KV.escapeHtml(KV.typeLabel(camp)) + (camp.archived ? " · archief" : "") + ' · fiche afgedrukt op ' + KV.todayStr() + '</div>' +
+
+        '<div class="fiche-grid">' +
+          field("Bestemming", camp.destination) +
+          field("Camping", camp.camping) +
+          field("Data", range) +
+          field("Vervoer", camp.transport) +
+          field("Begeleiders", camp.guides) +
+        '</div>' +
+
+        (camp.notes ? '<div class="fiche-section"><h3>Notities</h3><div class="fiche-notes">' + KV.escapeHtml(camp.notes).replace(/\n/g, "<br>") + '</div></div>' : '') +
+
+        '<div class="fiche-section">' +
+          '<h3>Checklist — ' + totalDone + '/' + campSteps.length + ' stappen klaar</h3>' +
+          '<div class="fiche-phases">' + phaseOrder.map(function (phase) {
+            var list = byPhase[phase];
+            var done = list.filter(function (s) { return s.done; }).length;
+            return '<div class="fiche-phase-row"><span>' + KV.escapeHtml(phase) + '</span><span>' + done + '/' + list.length + '</span></div>';
+          }).join("") + '</div>' +
+        '</div>' +
+
+        '<div class="fiche-section">' +
+          '<h3>Budget</h3>' +
+          '<div class="fiche-budget">' +
+            '<div><span class="n">' + KV.formatEUR(incTotal) + '</span><span class="l">Inkomsten</span></div>' +
+            '<div><span class="n">' + KV.formatEUR(expTotal) + '</span><span class="l">Uitgaven</span></div>' +
+            '<div><span class="n">' + KV.formatEUR(balance) + '</span><span class="l">Saldo</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  document.getElementById("print-btn").addEventListener("click", function () { window.print(); });
+
+  if (!KV.SETUP_NEEDED) refresh(); else renderSetupNeeded();
+})();
+</script>
