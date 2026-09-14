@@ -109,7 +109,7 @@
     var balance = incTotal - expTotal;
 
     var range = "";
-    if (camp.startDate) range = camp.startDate + (camp.endDate ? " → " + camp.endDate : "");
+    if (camp.startDate) range = KV.formatDateNL(camp.startDate) + (camp.endDate ? " → " + KV.formatDateNL(camp.endDate) : "");
 
     function field(label, value) {
       if (!value) return "";
@@ -119,7 +119,7 @@
     slot.innerHTML =
       '<div class="fiche-card">' +
         '<h1 class="fiche-title">' + KV.escapeHtml(camp.name) + '</h1>' +
-        '<div class="fiche-sub">' + KV.escapeHtml(KV.typeLabel(camp)) + (camp.archived ? " · archief" : "") + ' · fiche afgedrukt op ' + KV.todayStr() + '</div>' +
+        '<div class="fiche-sub">' + KV.escapeHtml(KV.typeLabel(camp)) + (camp.archived ? " · archief" : "") + ' · fiche afgedrukt op ' + KV.formatDateNL(KV.todayStr()) + '</div>' +
 
         '<div class="fiche-grid">' +
           field("Bestemming", camp.destination) +
@@ -127,8 +127,8 @@
           field("Data", range) +
           field("Vervoer", camp.transport) +
           field("Begeleiders", KV.guideNames(camp.guides).join(", ")) +
-          field("Aanvraag ingediend", camp.requestDate) +
-          field("Akkoord klimzaal", camp.approvalDate) +
+          field("Aanvraag ingediend", KV.formatDateNL(camp.requestDate)) +
+          field("Akkoord klimzaal", KV.formatDateNL(camp.approvalDate)) +
         '</div>' +
 
         (camp.notes ? '<div class="fiche-section"><h3>Notities</h3><div class="fiche-notes">' + KV.escapeHtml(camp.notes).replace(/\n/g, "<br>") + '</div></div>' : '') +

@@ -111,7 +111,7 @@
         '<tbody>' + rows.map(function (r) {
           return '<tr' + (r.camp.archived ? ' class="is-archived"' : '') + '>' +
             '<td>' + KV.escapeHtml(r.camp.name) + '<span class="ov-type">' + KV.escapeHtml(KV.typeLabel(r.camp)) + (r.camp.archived ? ' · archief' : '') + '</span></td>' +
-            '<td>' + KV.escapeHtml(r.camp.startDate || "—") + '</td>' +
+            '<td>' + KV.escapeHtml(KV.formatDateNL(r.camp.startDate) || "—") + '</td>' +
             KV.EXPENSE_CATEGORIES.map(function (k) { return '<td>' + (r.cat[k] ? KV.formatEUR(r.cat[k]) : '—') + '</td>'; }).join("") +
             '<td class="ov-good">' + KV.formatEUR(r.inc) + '</td>' +
             '<td>' + KV.formatEUR(r.exp) + '</td>' +

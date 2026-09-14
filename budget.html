@@ -140,7 +140,7 @@
         '<div class="money-add-box">' +
           '<div class="money-add-title">+ Nieuwe inkomst</div>' +
           '<div class="money-form" data-income-form="' + camp.id + '">' +
-            '<div class="mf-field"><label>Bedrag (€)</label><input type="number" step="0.01" min="0" data-inc-amount value="' + KV.escapeHtml(iDraft.amount) + '" placeholder="0,00"></div>' +
+            '<div class="mf-field"><label>Bedrag (€)</label><input type="text" inputmode="decimal" data-inc-amount value="' + KV.escapeHtml(iDraft.amount) + '" placeholder="0,00"></div>' +
             '<div class="mf-field"><label>Omschrijving</label><input type="text" data-inc-desc value="' + KV.escapeHtml(iDraft.description) + '" placeholder="bv. bijdrage klimzaal"></div>' +
             '<div class="mf-field"><label>Datum</label><input type="date" data-inc-date value="' + KV.escapeHtml(iDraft.date) + '"></div>' +
             '<button type="button" class="btn small primary" data-add-income="' + camp.id + '"' + (busy ? " disabled" : "") + '>Toevoegen</button>' +
@@ -154,7 +154,7 @@
         '<div class="money-add-box">' +
           '<div class="money-add-title">+ Nieuwe uitgave (bv. kasticket)</div>' +
           '<div class="money-form" data-expense-form="' + camp.id + '">' +
-            '<div class="mf-field"><label>Bedrag (€)</label><input type="number" step="0.01" min="0" data-exp-amount value="' + KV.escapeHtml(eDraft.amount) + '" placeholder="0,00"></div>' +
+            '<div class="mf-field"><label>Bedrag (€)</label><input type="text" inputmode="decimal" data-exp-amount value="' + KV.escapeHtml(eDraft.amount) + '" placeholder="0,00"></div>' +
             '<div class="mf-field"><label>Categorie</label><select data-exp-category>' +
               KV.EXPENSE_CATEGORIES.map(function (c) { return '<option value="' + KV.escapeHtml(c) + '"' + (eDraft.category === c ? " selected" : "") + '>' + KV.escapeHtml(c) + '</option>'; }).join("") +
             '</select></div>' +
@@ -176,7 +176,7 @@
   function renderIncomeRow(row) {
     return '<li class="money-row">' +
       '<span class="amt">' + KV.formatEUR(row.amount) + '</span>' +
-      '<span class="desc">' + KV.escapeHtml(row.description || "—") + ' · ' + KV.escapeHtml(row.date || "") + '</span>' +
+      '<span class="desc">' + KV.escapeHtml(row.description || "—") + ' · ' + KV.escapeHtml(KV.formatDateNL(row.date)) + '</span>' +
       '<span></span>' +
       '<button type="button" class="del" data-del-income="' + row.id + '" title="Verwijderen">×</button>' +
     '</li>';
@@ -186,7 +186,7 @@
     var cat = row.category === "Andere" && row.customCategory ? row.customCategory : row.category;
     return '<li class="money-row">' +
       '<span class="amt">' + KV.formatEUR(row.amount) + '</span>' +
-      '<span class="desc"><span class="cat">' + KV.escapeHtml(cat || "") + '</span>' + (row.description ? ' — ' + KV.escapeHtml(row.description) : '') + ' · ' + KV.escapeHtml(row.date || "") + '</span>' +
+      '<span class="desc"><span class="cat">' + KV.escapeHtml(cat || "") + '</span>' + (row.description ? ' — ' + KV.escapeHtml(row.description) : '') + ' · ' + KV.escapeHtml(KV.formatDateNL(row.date)) + '</span>' +
       (row.receiptUrl ? '<a class="receipt" href="' + KV.escapeHtml(row.receiptUrl) + '" target="_blank" rel="noopener">ticket</a>' : '<span></span>') +
       '<button type="button" class="del" data-del-expense="' + row.id + '" title="Verwijderen">×</button>' +
     '</li>';

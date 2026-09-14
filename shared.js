@@ -39,6 +39,42 @@ var KV = (function () {
     try { localStorage.setItem(ACCESS_KEY_KEY, key); } catch (e) { /* negeren */ }
   }
 
+  /** Dialoogvenster om de Web-app-link en de toegangscode in te stellen, of ze
+   *  later te wijzigen (bv. wanneer er een nieuwe Apps Script-deployment is en
+   *  de link verandert). Staat bewust los van #banner-slot: dat vak wordt bij
+   *  elke verversing overschreven, waardoor je formulier zou verdwijnen. */
+  function openConnectionDialog() {
+    if (document.querySelector(".kv-modal-back")) return;
+    var back = document.createElement("div");
+    back.className = "kv-modal-back";
+    back.innerHTML =
+      '<div class="kv-modal" role="dialog" aria-modal="true">' +
+        '<h3>Verbinding met de gedeelde Sheet</h3>' +
+        '<p>Deze twee gegevens krijg je van een medebegeleider. Ze worden enkel in deze browser bewaard, nooit in de broncode van de site.</p>' +
+        '<label for="kv-cfg-url">Web-app-link (eindigt op /exec)</label>' +
+        '<input id="kv-cfg-url" type="text" value="' + escapeHtml(CONFIG.API_URL) + '" placeholder="https://script.google.com/macros/s/.../exec">' +
+        '<label for="kv-cfg-key">Toegangscode</label>' +
+        '<input id="kv-cfg-key" type="text" value="' + escapeHtml(CONFIG.ACCESS_KEY) + '" placeholder="toegangscode">' +
+        '<div class="kv-modal-actions">' +
+          '<button type="button" class="btn" id="kv-cfg-cancel">Annuleren</button>' +
+          '<button type="button" class="btn primary" id="kv-cfg-save">Opslaan</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(back);
+
+    function close() { back.parentNode.removeChild(back); }
+    back.addEventListener("click", function (e) { if (e.target === back) close(); });
+    document.getElementById("kv-cfg-cancel").addEventListener("click", close);
+    document.getElementById("kv-cfg-save").addEventListener("click", function () {
+      var url = document.getElementById("kv-cfg-url").value.trim();
+      var key = document.getElementById("kv-cfg-key").value.trim();
+      if (!url || !key) { alert("Vul zowel de link als de toegangscode in."); return; }
+      saveApiUrl(url);
+      saveAccessKey(key);
+      location.reload();
+    });
+  }
+
   var DEFAULT_CHECKLIST = [
     { phase: "Aanvraag & basis", steps: [
       "Aanvraag bergkamp bij de klimzaal",
@@ -95,8 +131,14 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "1.5";
+  var VERSION = "1.6";
   var CHANGELOG = [
+    { version: "1.6", date: "2026-09-14", changes: [
+      "Verbinding (link + toegangscode) is nu achteraf te wijzigen, via het versienummer linksboven",
+      "Bedragen mogen met een komma ingetypt worden (250,50)",
+      "Datums worden getoond als 01/08/2027 in plaats van 2027-08-01",
+      "Wijzigen, afvinken en verwijderen worden stil opnieuw geprobeerd als de verbinding even hapert"
+    ]},
     { version: "1.5", date: "2026-09-14", changes: [
       "Werkt nu echt op een smartphone: de pagina past zich aan de schermbreedte aan",
       "Grotere vinkjes en knoppen om met de vinger te bedienen",
@@ -145,9 +187,11 @@ var KV = (function () {
             '<ul>' + e.changes.map(function (c) { return '<li>' + escapeHtml(c) + '</li>'; }).join("") + '</ul>' +
           '</div>';
         }).join("") +
+        '<div class="version-foot"><button type="button" class="version-link" id="kv-open-cfg">Verbinding wijzigen…</button></div>' +
       '</div>';
     eyebrow.appendChild(wrap);
 
+    wrap.querySelector("#kv-open-cfg").addEventListener("click", openConnectionDialog);
     var btn = wrap.querySelector(".version-badge");
     var panel = wrap.querySelector(".version-panel");
     btn.addEventListener("click", function () {
@@ -185,6 +229,15 @@ var KV = (function () {
     var s = String(v);
     var m = s.match(/^(\d{4}-\d{2}-\d{2})/);
     return m ? m[1] : "";
+  }
+
+  /** Toont een jjjj-mm-dd-datum als dd/mm/jjjj. Enkel voor weergave — opgeslagen
+   *  blijft het jjjj-mm-dd, want daarop wordt gesorteerd en vergeleken. */
+  function formatDateNL(v) {
+    var s = normalizeDateStr(v);
+    if (!s) return "";
+    var p = s.split("-");
+    return p[2] + "/" + p[1] + "/" + p[0];
   }
 
   function daysUntil(dateStr) {
@@ -257,21 +310,10 @@ var KV = (function () {
     if (!slot) return;
     slot.innerHTML =
       '<div class="banner bad">' +
-        '<div style="margin-bottom:10px">Deze pagina is nog niet gekoppeld aan de gedeelde Google Sheet. Plak hieronder de Web-app-link én de toegangscode (vraag ze na bij een medebegeleider) — dit hoeft maar één keer per toestel/browser.</div>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          '<input type="text" id="kv-setup-url" placeholder="https://script.google.com/macros/s/.../exec" style="flex:2;min-width:240px;padding:8px 10px;border-radius:5px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-family:var(--font-mono);font-size:12.5px;">' +
-          '<input type="password" id="kv-setup-key" placeholder="toegangscode" style="flex:1;min-width:140px;padding:8px 10px;border-radius:5px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-family:var(--font-mono);font-size:12.5px;">' +
-          '<button type="button" class="btn primary" id="kv-setup-save">Opslaan</button>' +
-        '</div>' +
+        '<div style="margin-bottom:10px">Deze pagina is nog niet gekoppeld aan de gedeelde Google Sheet. Je hebt daarvoor de Web-app-link en de toegangscode nodig — vraag die na bij een medebegeleider. Dit hoeft maar één keer per toestel/browser.</div>' +
+        '<button type="button" class="btn primary" id="kv-setup-open">Verbinding instellen…</button>' +
       '</div>';
-    document.getElementById("kv-setup-save").addEventListener("click", function () {
-      var url = document.getElementById("kv-setup-url").value.trim();
-      var key = document.getElementById("kv-setup-key").value.trim();
-      if (!url || !key) return;
-      saveApiUrl(url);
-      saveAccessKey(key);
-      location.reload();
-    });
+    document.getElementById("kv-setup-open").addEventListener("click", openConnectionDialog);
   }
 
   /** Werkt de verbindingsindicator (#conn-dot/#conn-text) en #banner-slot bij.
@@ -407,12 +449,22 @@ var KV = (function () {
     var sep = CONFIG.API_URL.indexOf("?") === -1 ? "?" : "&";
     return fetchJsonWithRetry_(CONFIG.API_URL + sep + "key=" + encodeURIComponent(CONFIG.ACCESS_KEY), { method: "GET" });
   }
+  // Acties die je veilig opnieuw mag proberen na de HTML-hapering hierboven:
+  // ze zetten een bekende waarde of verwijderen iets, dus twee keer uitvoeren
+  // geeft hetzelfde resultaat. Bij toevoegen mag dat NIET — een herhaling zou
+  // een tweede kamp of een dubbele uitgave kunnen aanmaken.
+  var REPEATABLE_ACTIONS = ["updateCamp", "updateStep", "updateIncome", "updateExpense", "deleteCamp", "deleteIncome", "deleteExpense"];
+
   function apiPost(action, payload) {
-    return fetch(CONFIG.API_URL, {
+    var opts = {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: action, payload: payload, key: CONFIG.ACCESS_KEY })
-    }).then(function (r) { return r.json(); }).then(function (json) {
+    };
+    var request = REPEATABLE_ACTIONS.indexOf(action) !== -1
+      ? fetchJsonWithRetry_(CONFIG.API_URL, opts)
+      : fetch(CONFIG.API_URL, opts).then(function (r) { return r.json(); });
+    return request.then(function (json) {
       if (!json.ok) throw new Error(json.error || "onbekende fout van de API");
       return json.result;
     });
@@ -473,15 +525,15 @@ var KV = (function () {
       var d = daysUntil(camp.startDate);
       var cls = d < 0 ? "bad" : (d <= 21 ? "warn" : "");
       var text = d < 0 ? "gestart" : (d === 0 ? "vandaag" : "over " + d + " dagen");
-      var range = camp.startDate + (camp.endDate ? " \u2192 " + camp.endDate : "");
+      var range = formatDateNL(camp.startDate) + (camp.endDate ? " \u2192 " + formatDateNL(camp.endDate) : "");
       countdownHtml = '<span class="countdown ' + cls + '">vertrek ' + escapeHtml(range) + ' \u00b7 ' + text + '</span>';
     }
     var adminBits = [];
     if (camp.camping) adminBits.push('<span>Camping: ' + escapeHtml(camp.camping) + '</span>');
     if (camp.guides) adminBits.push('<span>Begeleiders: ' + escapeHtml(guideNames(camp.guides).join(", ")) + '</span>');
     if (camp.transport) adminBits.push('<span>Vervoer: ' + escapeHtml(camp.transport) + '</span>');
-    if (camp.requestDate) adminBits.push('<span>Aanvraag: ' + escapeHtml(camp.requestDate) + '</span>');
-    if (camp.approvalDate) adminBits.push('<span>Akkoord klimzaal: ' + escapeHtml(camp.approvalDate) + '</span>');
+    if (camp.requestDate) adminBits.push('<span>Aanvraag ingediend: ' + escapeHtml(formatDateNL(camp.requestDate)) + '</span>');
+    if (camp.approvalDate) adminBits.push('<span>Akkoord klimzaal: ' + escapeHtml(formatDateNL(camp.approvalDate)) + '</span>');
 
     var byPhase = {}, phaseOrder = [];
     campSteps.forEach(function (s) {
@@ -625,7 +677,8 @@ var KV = (function () {
     CONFIG: CONFIG, SETUP_NEEDED: SETUP_NEEDED, DEFAULT_CHECKLIST: DEFAULT_CHECKLIST, TYPE_LABELS: TYPE_LABELS,
     EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, BASE_BEGELEIDERS: BASE_BEGELEIDERS,
     escapeHtml: escapeHtml, cssEscape: cssEscape, todayStr: todayStr, daysUntil: daysUntil,
-    normalizeDateStr: normalizeDateStr, boolish: boolish, formatEUR: formatEUR, stepStatusClass: stepStatusClass,
+    normalizeDateStr: normalizeDateStr, formatDateNL: formatDateNL, boolish: boolish, formatEUR: formatEUR, stepStatusClass: stepStatusClass,
+    openConnectionDialog: openConnectionDialog,
     typeLabel: typeLabel, stepsForCamp: stepsForCamp, buildDefaultSteps: buildDefaultSteps,
     begeleiderOptions: begeleiderOptions, renderBegeleiderDatalist: renderBegeleiderDatalist,
     parseGuides: parseGuides, formatGuides: formatGuides, guideNames: guideNames,
