@@ -215,9 +215,30 @@ var KV = (function () {
 
   /* ---------------- API laag (Google Apps Script) ---------------- */
 
+  /** Apps Script's /exec-link geeft af en toe kortstondig een HTML-pagina
+   *  terug in plaats van JSON (een gekende eigenaardigheid van het redirect-
+   *  mechanisme achter elke Apps Script-webapp, geen fout in deze code) —
+   *  bij een lees-aanvraag is opnieuw proberen altijd veilig (in tegenstelling
+   *  tot een schrijf-aanvraag), dus vang dit hier op vóór de gebruiker een
+   *  foutmelding te zien krijgt. */
+  function fetchJsonWithRetry_(url, opts, attempt) {
+    attempt = attempt || 1;
+    return fetch(url, opts).then(function (r) { return r.text(); }).then(function (text) {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        if (attempt < 3) {
+          return new Promise(function (resolve) { setTimeout(resolve, attempt * 400); })
+            .then(function () { return fetchJsonWithRetry_(url, opts, attempt + 1); });
+        }
+        throw new Error("Kreeg geen geldig antwoord van de API na " + attempt + " pogingen.");
+      }
+    });
+  }
+
   function apiGet() {
     var sep = CONFIG.API_URL.indexOf("?") === -1 ? "?" : "&";
-    return fetch(CONFIG.API_URL + sep + "key=" + encodeURIComponent(CONFIG.ACCESS_KEY), { method: "GET" }).then(function (r) { return r.json(); });
+    return fetchJsonWithRetry_(CONFIG.API_URL + sep + "key=" + encodeURIComponent(CONFIG.ACCESS_KEY), { method: "GET" });
   }
   function apiPost(action, payload) {
     return fetch(CONFIG.API_URL, {
