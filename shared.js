@@ -39,6 +39,41 @@ var KV = (function () {
     try { localStorage.setItem(ACCESS_KEY_KEY, key); } catch (e) { /* negeren */ }
   }
 
+  /** Controleert een ingevulde link + code zonder ze op te slaan, en meldt drie
+   *  dingen: of de link bereikbaar is, of de code aanvaard wordt, en — even
+   *  belangrijk — of diezelfde link gegevens vrijgeeft ZONDER code. Dat laatste
+   *  wijst op een oude, onbeveiligde deployment die nog niet gearchiveerd is. */
+  function testConnection(url, key) {
+    var out = document.getElementById("kv-cfg-result");
+    function report(text, kind) {
+      out.hidden = false;
+      out.className = "kv-test-result" + (kind ? " " + kind : "");
+      out.textContent = text;
+    }
+    if (!url || !key) { report("Vul eerst de link en de toegangscode in.", "bad"); return; }
+
+    report("Bezig met testen…", "");
+    var sep = url.indexOf("?") === -1 ? "?" : "&";
+    fetchJsonWithRetry_(url + sep + "key=" + encodeURIComponent(key), { method: "GET" }).then(function (data) {
+      if (!data.ok) {
+        report("De link werkt, maar de toegangscode wordt geweigerd: " + (data.error || "onbekende reden"), "bad");
+        return null;
+      }
+      return fetch(url, { method: "GET" }).then(function (r) { return r.text(); }).then(function (text) {
+        var openZonderCode = false;
+        try { openZonderCode = JSON.parse(text).ok === true; } catch (e) { /* geen JSON = geen toegang */ }
+        var aantal = (data.camps || []).length;
+        if (openZonderCode) {
+          report("Verbinding werkt (" + aantal + " kampen), maar LET OP: deze link geeft ook zonder toegangscode gegevens vrij. Dat is een oude, onbeveiligde deployment — archiveer ze in Apps Script.", "warn");
+        } else {
+          report("Verbinding werkt: " + aantal + " kampen gevonden, en de link is correct beveiligd.", "good");
+        }
+      });
+    }).catch(function (err) {
+      report("Geen verbinding met deze link (" + (err && err.message ? err.message : "onbekende fout") + "). Klopt de link, en eindigt hij op /exec?", "bad");
+    });
+  }
+
   /** Dialoogvenster om de Web-app-link en de toegangscode in te stellen, of ze
    *  later te wijzigen (bv. wanneer er een nieuwe Apps Script-deployment is en
    *  de link verandert). Staat bewust los van #banner-slot: dat vak wordt bij
@@ -55,8 +90,10 @@ var KV = (function () {
         '<input id="kv-cfg-url" type="text" value="' + escapeHtml(CONFIG.API_URL) + '" placeholder="https://script.google.com/macros/s/.../exec">' +
         '<label for="kv-cfg-key">Toegangscode</label>' +
         '<input id="kv-cfg-key" type="text" value="' + escapeHtml(CONFIG.ACCESS_KEY) + '" placeholder="toegangscode">' +
+        '<div class="kv-test-result" id="kv-cfg-result" hidden></div>' +
         '<div class="kv-modal-actions">' +
           '<button type="button" class="btn" id="kv-cfg-cancel">Annuleren</button>' +
+          '<button type="button" class="btn" id="kv-cfg-test">Verbinding testen</button>' +
           '<button type="button" class="btn primary" id="kv-cfg-save">Opslaan</button>' +
         '</div>' +
       '</div>';
@@ -65,6 +102,12 @@ var KV = (function () {
     function close() { back.parentNode.removeChild(back); }
     back.addEventListener("click", function (e) { if (e.target === back) close(); });
     document.getElementById("kv-cfg-cancel").addEventListener("click", close);
+    document.getElementById("kv-cfg-test").addEventListener("click", function () {
+      testConnection(
+        document.getElementById("kv-cfg-url").value.trim(),
+        document.getElementById("kv-cfg-key").value.trim()
+      );
+    });
     document.getElementById("kv-cfg-save").addEventListener("click", function () {
       var url = document.getElementById("kv-cfg-url").value.trim();
       var key = document.getElementById("kv-cfg-key").value.trim();
@@ -131,8 +174,12 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "1.6";
+  var VERSION = "1.7";
   var CHANGELOG = [
+    { version: "1.7", date: "2026-09-14", changes: [
+      "Knop \"Verbinding testen\": controleert of de link werkt, of de code klopt, en waarschuwt als een link ook zonder code gegevens vrijgeeft",
+      "\"Verbinding wijzigen\" staat nu bovenaan het versiepaneel in plaats van onderaan"
+    ]},
     { version: "1.6", date: "2026-09-14", changes: [
       "Verbinding (link + toegangscode) is nu achteraf te wijzigen, via het versienummer linksboven",
       "Bedragen mogen met een komma ingetypt worden (250,50)",
