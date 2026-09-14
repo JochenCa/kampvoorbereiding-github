@@ -10,6 +10,7 @@
       <p class="dek">Inkomsten en uitgaven per kamp. Kasticket fotograferen/uploaden kan rechtstreeks vanaf de gsm; bedrag en categorie kies je zelf.</p>
       <a class="top-link" href="kampvoorbereiding.html">← Actieve kampen</a>
       <a class="top-link" href="archief.html">→ Archief</a>
+      <a class="top-link" href="overzicht.html">→ Financieel overzicht</a>
     </div>
     <div class="head-actions">
       <button class="btn icon" id="refresh-btn" type="button" title="Nu vernieuwen">↻</button>
@@ -40,6 +41,8 @@
   var lastError = "";
   var pollTimer = null;
   var autoExpandDone = false; // klapt bij het allereerste laden alle kampen open, zodat de "toevoegen"-vakken meteen zichtbaar zijn
+  var deepLinkId = new URLSearchParams(location.search).get("id"); // vanaf de "Budget"-knop op een kampkaart: enkel dát kamp open+scrollen
+  var scrolledToDeepLink = false;
 
   function emptyIncomeDraft() { return { amount: "", description: "", date: KV.todayStr() }; }
   function emptyExpenseDraft() { return { amount: "", category: "Boodschappen", customCategory: "", description: "", date: KV.todayStr(), fileBase64: "", fileMimeType: "", fileLabel: "" }; }
@@ -51,7 +54,8 @@
       camps = data.camps; income = data.income; expenses = data.expenses;
       connState = "ok"; lastError = "";
       if (!autoExpandDone && camps.length) {
-        camps.forEach(function (c) { expandedIds.add(c.id); });
+        if (deepLinkId) expandedIds.add(deepLinkId);
+        else camps.forEach(function (c) { expandedIds.add(c.id); });
         autoExpandDone = true;
       }
       render();
@@ -72,6 +76,14 @@
     if (suspendRender) { pendingRender = true; return; }
     renderConnStatus();
     renderCamps();
+    maybeScrollToDeepLink();
+  }
+  function maybeScrollToDeepLink() {
+    if (!deepLinkId || scrolledToDeepLink) return;
+    var card = document.querySelector('.camp[data-camp-id="' + KV.cssEscape(deepLinkId) + '"]');
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrolledToDeepLink = true;
   }
   function scheduleRenderAfterEdit() { if (pendingRender) { pendingRender = false; refresh(); } }
 

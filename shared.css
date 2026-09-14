@@ -127,6 +127,30 @@ h1{ font-size: 32px; letter-spacing:-.01em; }
 
 footer.foot{ margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; font-family: var(--font-mono); color: var(--ink-soft); }
 
+.table-wrap{ overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.overzicht-table{ width:100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+.overzicht-table th, .overzicht-table td{ padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--line); }
+.overzicht-table th:first-child, .overzicht-table td:first-child{ text-align: left; white-space: normal; }
+.overzicht-table th{ font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing:.04em; color: var(--ink-soft); background: var(--surface-2); white-space: normal; }
+.overzicht-table td{ font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.overzicht-table td:first-child{ font-family: var(--font-body); }
+.overzicht-table .ov-type{ display:block; font-family: var(--font-mono); font-size: 11px; color: var(--ink-soft); }
+.overzicht-table tr.is-archived{ opacity:.6; }
+.overzicht-table .ov-good{ color: var(--good); }
+.overzicht-table .ov-bad{ color: var(--bad); }
+.overzicht-table tfoot td{ border-top: 2px solid var(--line-strong); border-bottom: none; font-weight: 500; background: var(--surface-2); }
+
+.deadlines-panel{ background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 24px; overflow:hidden; }
+.deadlines-panel h3{ font-size: 12px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing:.06em; color: var(--ink-soft); padding: 14px 16px 8px; margin:0; }
+.deadline-row{ display:grid; grid-template-columns: 1fr auto auto; align-items:center; gap:14px; width:100%; text-align:left; padding: 9px 16px; border-top: 1px solid var(--line); border-left: 3px solid transparent; background:none; cursor:pointer; font-family: var(--font-body); font-size:13.5px; color: var(--ink); line-height:1.4; }
+.deadline-row:hover{ background: var(--surface-2); }
+.deadline-row.is-warn{ border-left-color: var(--warn); }
+.deadline-row.is-bad{ border-left-color: var(--bad); }
+.deadline-row .camp{ display:block; font-family: var(--font-mono); font-size:11px; color: var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; }
+.deadline-row .when{ font-family: var(--font-mono); font-size:12.5px; white-space:nowrap; }
+.deadline-row .when.is-warn{ color: var(--warn); }
+.deadline-row .when.is-bad{ color: var(--bad); }
+
 .nav-tiles{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom: 28px; }
 .nav-tile{ flex:1; min-width:200px; display:block; text-decoration:none; background: var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px 16px; transition: border-color .15s, background .15s; }
 .nav-tile:hover{ border-color: var(--accent); background: var(--surface-2); }
@@ -173,4 +197,5 @@ footer.foot{ margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--li
   .progress-wrap{ min-width: 0; }
   .step{ grid-template-columns: 18px 1fr; row-gap: 6px; }
   .step-date, .step-owner{ grid-column: 2 / 3; }
+  .deadline-row{ grid-template-columns: 1fr; row-gap: 4px; }
 }

@@ -1,0 +1,153 @@
+<title>Financieel overzicht — Kampvoorbereiding</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<div class="page">
+  <header class="top">
+    <div>
+      <div class="eyebrow"><span class="dot" id="conn-dot"></span><span id="conn-text">Verbinden…</span></div>
+      <h1>Financieel overzicht</h1>
+      <p class="dek">Totaal inkomsten, uitgaven en saldo per editie, over alle jaren heen — handig bij het aanvragen van een nieuw budget of bij de overdracht aan toekomstige begeleiders.</p>
+      <a class="top-link" href="kampvoorbereiding.html">← Actieve kampen</a>
+      <a class="top-link" href="budget.html">→ Budget per kamp</a>
+    </div>
+    <div class="head-actions">
+      <button class="btn icon" id="refresh-btn" type="button" title="Nu vernieuwen">↻</button>
+    </div>
+  </header>
+
+  <div id="banner-slot"></div>
+  <div id="overzicht-slot"></div>
+
+  <footer class="foot">Administratie bergkamp | ontwerp door JochenCa</footer>
+</div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var camps = [], income = [], expenses = [];
+  var connState = "connecting";
+  var lastError = "";
+  var pollTimer = null;
+
+  function refresh() {
+    if (KV.SETUP_NEEDED) { render(); return Promise.resolve(); }
+    return KV.fetchAll().then(function (data) {
+      camps = data.camps; income = data.income; expenses = data.expenses;
+      connState = "ok"; lastError = "";
+      render();
+    }).catch(function (err) {
+      connState = "error"; lastError = err && err.message ? err.message : String(err);
+      render();
+    });
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () { refresh(); }, KV.CONFIG.POLL_MS);
+  }
+
+  function render() {
+    renderConnStatus();
+    renderOverzicht();
+  }
+
+  function renderConnStatus() {
+    var dot = document.getElementById("conn-dot");
+    var text = document.getElementById("conn-text");
+    var slot = document.getElementById("banner-slot");
+    if (KV.SETUP_NEEDED) {
+      dot.className = "dot bad"; text.textContent = "Nog niet ingesteld";
+      KV.renderSetupBanner("banner-slot");
+      return;
+    }
+    if (connState === "connecting") { dot.className = "dot"; text.textContent = "Verbinden…"; slot.innerHTML = ""; }
+    else if (connState === "error") { dot.className = "dot bad"; text.textContent = "Kan niet verbinden"; slot.innerHTML = '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + KV.escapeHtml(lastError) + ').</div>'; }
+    else { dot.className = "dot ok"; text.textContent = "Verbonden — ververst elke " + Math.round(KV.CONFIG.POLL_MS / 1000) + "s"; slot.innerHTML = ""; }
+  }
+
+  /** Sommeert de uitgaven van één kamp per vaste categorie (EXPENSE_CATEGORIES) —
+   *  een "Andere"-uitgave met een eigen omschrijving telt hier gewoon mee onder
+   *  "Andere", dit overzicht gaat over totalen, niet over de vrije tekst erbij. */
+  function campCategoryTotals(campId) {
+    var totals = {};
+    KV.EXPENSE_CATEGORIES.forEach(function (c) { totals[c] = 0; });
+    expenses.filter(function (x) { return x.campId === campId; }).forEach(function (x) {
+      var cat = KV.EXPENSE_CATEGORIES.indexOf(x.category) !== -1 ? x.category : "Andere";
+      totals[cat] += x.amount;
+    });
+    return totals;
+  }
+
+  function renderOverzicht() {
+    var slot = document.getElementById("overzicht-slot");
+    if (KV.SETUP_NEEDED) { slot.innerHTML = ""; return; }
+    if (camps.length === 0) {
+      if (connState === "ok") slot.innerHTML = '<div class="empty"><h3>Nog geen kampen</h3><p>Zodra er kampen met budgetgegevens zijn, verschijnt hier het overzicht per editie.</p></div>';
+      else slot.innerHTML = "";
+      return;
+    }
+
+    var sorted = camps.slice().sort(function (a, b) {
+      if (a.startDate && b.startDate) return a.startDate < b.startDate ? -1 : 1;
+      if (a.startDate) return -1;
+      if (b.startDate) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+    var rows = sorted.map(function (c) {
+      var cat = campCategoryTotals(c.id);
+      var inc = income.filter(function (i) { return i.campId === c.id; }).reduce(function (s, i) { return s + i.amount; }, 0);
+      var exp = KV.EXPENSE_CATEGORIES.reduce(function (s, k) { return s + cat[k]; }, 0);
+      return { camp: c, cat: cat, inc: inc, exp: exp, balance: inc - exp };
+    });
+
+    // Gemiddelden enkel over edities die al effectief budgetgegevens hebben —
+    // een gloednieuw kamp zonder ingevoerd bedrag zou het gemiddelde anders
+    // kunstmatig omlaag trekken, terwijl daar simpelweg nog niets is ingevuld.
+    var withData = rows.filter(function (r) { return r.inc > 0 || r.exp > 0; });
+    var avg = { cat: {}, inc: 0, exp: 0, balance: 0 };
+    KV.EXPENSE_CATEGORIES.forEach(function (k) { avg.cat[k] = 0; });
+    if (withData.length) {
+      withData.forEach(function (r) {
+        avg.inc += r.inc; avg.exp += r.exp; avg.balance += r.balance;
+        KV.EXPENSE_CATEGORIES.forEach(function (k) { avg.cat[k] += r.cat[k]; });
+      });
+      avg.inc /= withData.length; avg.exp /= withData.length; avg.balance /= withData.length;
+      KV.EXPENSE_CATEGORIES.forEach(function (k) { avg.cat[k] /= withData.length; });
+    }
+
+    slot.innerHTML =
+      '<div class="table-wrap"><table class="overzicht-table">' +
+        '<thead><tr>' +
+          '<th>Editie</th><th>Datum</th>' +
+          KV.EXPENSE_CATEGORIES.map(function (k) { return '<th>' + KV.escapeHtml(k) + '</th>'; }).join("") +
+          '<th>Inkomsten</th><th>Uitgaven</th><th>Saldo</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows.map(function (r) {
+          return '<tr' + (r.camp.archived ? ' class="is-archived"' : '') + '>' +
+            '<td>' + KV.escapeHtml(r.camp.name) + '<span class="ov-type">' + KV.escapeHtml(KV.typeLabel(r.camp)) + (r.camp.archived ? ' · archief' : '') + '</span></td>' +
+            '<td>' + KV.escapeHtml(r.camp.startDate || "—") + '</td>' +
+            KV.EXPENSE_CATEGORIES.map(function (k) { return '<td>' + (r.cat[k] ? KV.formatEUR(r.cat[k]) : '—') + '</td>'; }).join("") +
+            '<td class="ov-good">' + KV.formatEUR(r.inc) + '</td>' +
+            '<td>' + KV.formatEUR(r.exp) + '</td>' +
+            '<td class="' + (r.balance < 0 ? 'ov-bad' : 'ov-good') + '">' + KV.formatEUR(r.balance) + '</td>' +
+          '</tr>';
+        }).join("") + '</tbody>' +
+        (withData.length ? '<tfoot><tr>' +
+          '<td>Gemiddelde</td><td>' + withData.length + ' editie' + (withData.length === 1 ? "" : "s") + '</td>' +
+          KV.EXPENSE_CATEGORIES.map(function (k) { return '<td>' + (avg.cat[k] ? KV.formatEUR(avg.cat[k]) : '—') + '</td>'; }).join("") +
+          '<td>' + KV.formatEUR(avg.inc) + '</td><td>' + KV.formatEUR(avg.exp) + '</td>' +
+          '<td class="' + (avg.balance < 0 ? 'ov-bad' : 'ov-good') + '">' + KV.formatEUR(avg.balance) + '</td>' +
+        '</tr></tfoot>' : '') +
+      '</table></div>';
+  }
+
+  document.getElementById("refresh-btn").addEventListener("click", function () { refresh(); });
+
+  render();
+  if (!KV.SETUP_NEEDED) { refresh().then(startPolling); }
+})();
+</script>

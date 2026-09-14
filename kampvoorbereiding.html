@@ -24,9 +24,14 @@
       <span class="nav-tile-title">→ Budget</span>
       <span class="nav-tile-desc">Inkomsten &amp; uitgaven invoegen</span>
     </a>
+    <a class="nav-tile" href="overzicht.html">
+      <span class="nav-tile-title">→ Financieel overzicht</span>
+      <span class="nav-tile-desc">Totalen en gemiddelden per editie</span>
+    </a>
   </div>
 
   <div id="banner-slot"></div>
+  <div id="deadlines-slot"></div>
   <div id="form-slot"></div>
   <div id="camps-slot"></div>
 
@@ -93,6 +98,53 @@
     renderConnStatus();
     renderForm();
     renderCamps();
+    renderDeadlines();
+  }
+
+  /** Verzamelt openstaande stappen (niet afgevinkt, met streefdatum) van alle
+   *  actieve (niet-gearchiveerde) kampen samen, verlopen of binnen 14 dagen —
+   *  zelfde drempel als de rode/oranje markering per stap, maar hier over alle
+   *  kampen heen i.p.v. enkel binnen een opengeklapt kamp zichtbaar. */
+  function collectUrgentSteps() {
+    var activeCamps = {};
+    camps.forEach(function (c) { if (!c.archived) activeCamps[c.id] = c; });
+    var rows = steps.filter(function (s) {
+      if (s.done || !s.targetDate || !activeCamps[s.campId]) return false;
+      var d = KV.daysUntil(s.targetDate);
+      return d !== null && d <= 14;
+    }).map(function (s) {
+      return { step: s, camp: activeCamps[s.campId], d: KV.daysUntil(s.targetDate) };
+    });
+    rows.sort(function (a, b) { return a.d - b.d; });
+    return rows;
+  }
+
+  function renderDeadlines() {
+    var slot = document.getElementById("deadlines-slot");
+    if (KV.SETUP_NEEDED || connState !== "ok") { slot.innerHTML = ""; return; }
+    var rows = collectUrgentSteps();
+    if (!rows.length) { slot.innerHTML = ""; return; }
+    slot.innerHTML = '<div class="deadlines-panel"><h3>Dringende stappen (' + rows.length + ')</h3>' +
+      rows.map(function (r) {
+        var cls = r.d < 0 ? "is-bad" : "is-warn";
+        var n = Math.abs(r.d);
+        var text = r.d < 0 ? "verlopen sinds " + n + " dag" + (n === 1 ? "" : "en") : (r.d === 0 ? "vandaag" : "over " + n + " dag" + (n === 1 ? "" : "en"));
+        return '<button type="button" class="deadline-row ' + cls + '" data-deadline-camp="' + r.camp.id + '">' +
+          '<span><span class="camp">' + KV.escapeHtml(r.camp.name) + '</span><br>' + KV.escapeHtml(r.step.title) + '</span>' +
+          '<span>' + (r.step.owner ? KV.escapeHtml(r.step.owner) : '') + '</span>' +
+          '<span class="when ' + cls + '">' + text + '</span>' +
+        '</button>';
+      }).join("") +
+    '</div>';
+    slot.querySelectorAll('[data-deadline-camp]').forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-deadline-camp");
+        expandedIds.add(id);
+        render();
+        var card = document.querySelector('.camp[data-camp-id="' + KV.cssEscape(id) + '"]');
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
   function scheduleRenderAfterEdit() { if (pendingRender) { pendingRender = false; refresh(); } }
 

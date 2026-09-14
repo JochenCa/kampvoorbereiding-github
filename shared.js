@@ -342,6 +342,7 @@ var KV = (function () {
         '<div class="camp-actions">' +
           '<button type="button" class="btn small danger" data-delete="' + camp.id + '" data-delete-name="' + escapeHtml(camp.name) + '">Verwijderen</button>' +
           '<div class="camp-actions-right">' +
+            '<a class="btn small" href="budget.html?id=' + encodeURIComponent(camp.id) + '">Budget</a>' +
             '<a class="btn small" href="fiche.html?id=' + encodeURIComponent(camp.id) + '" target="_blank" rel="noopener">Fiche afdrukken</a>' +
             '<button type="button" class="btn small" data-edit="' + camp.id + '">Bewerken</button>' +
             '<button type="button" class="btn small" data-archive-toggle="' + camp.id + '" data-archive-value="' + (camp.archived ? "false" : "true") + '">' + (camp.archived ? "Terug naar actief" : "Archiveren") + '</button>' +
