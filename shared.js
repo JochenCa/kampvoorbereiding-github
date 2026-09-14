@@ -95,8 +95,14 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "1.4";
+  var VERSION = "1.5";
   var CHANGELOG = [
+    { version: "1.5", date: "2026-09-14", changes: [
+      "Werkt nu echt op een smartphone: de pagina past zich aan de schermbreedte aan",
+      "Grotere vinkjes en knoppen om met de vinger te bedienen",
+      "Invoervelden zoomen niet meer ongewild in op iPhone",
+      "Financieel overzicht: kampnaam blijft staan bij zijwaarts scrollen"
+    ]},
     { version: "1.4", date: "2026-09-14", changes: [
       "Tegels om tussen de pagina's te navigeren, op elke pagina",
       "Paneel met dringende stappen over alle actieve kampen heen",

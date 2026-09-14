@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kampfiche</title>
 <link rel="stylesheet" href="shared.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -23,6 +26,14 @@
   .fiche-notes{ white-space: pre-wrap; font-size: 14px; }
   .fiche-picker ul{ list-style:none; margin:0; padding:0; }
   .fiche-picker li a{ display:block; padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; }
+  @media (max-width: 640px) {
+    .fiche-page{ padding: 24px 16px 60px; }
+    .fiche-card{ padding: 20px 18px; }
+    .fiche-title{ font-size: 23px; }
+    .fiche-grid{ grid-template-columns: 1fr; gap: 12px; }
+    .fiche-phases{ grid-template-columns: 1fr; }
+    .fiche-budget{ grid-template-columns: 1fr; }
+  }
   @media print {
     .no-print{ display:none !important; }
     body{ background: #fff; }
