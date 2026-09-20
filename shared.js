@@ -121,64 +121,89 @@ var KV = (function () {
     });
   }
 
+  /* De standaardchecklist. Per stap staat er een termijn bij:
+   *    voor: 210  ->  210 dagen VÓÓR de vertrekdatum
+   *    na:    14  ->   14 dagen NÁ de terugkeerdatum
+   *
+   * Vul je bij een kamp een vertrekdatum in, dan krijgt elke stap meteen een
+   * streefdatum. Zonder die termijnen blijft een vers kamp stil: het paneel
+   * "Dringende stappen" en de herinneringsmails kijken allebei naar de
+   * streefdatum, en die was vroeger altijd leeg.
+   *
+   * De termijnen zijn geijkt op een zomerkamp in juli/augustus, waarbij de
+   * voorbereiding in het najaar ervoor start en de inschrijvingen rond
+   * nieuwjaar opengaan. Elke datum blijft achteraf aanpasbaar per kamp; hier
+   * wijzigen verandert enkel wat een NIEUW kamp meekrijgt. */
   var DEFAULT_CHECKLIST = [
     { phase: "Aanvraag & basis", steps: [
-      "Aanvraag bergkamp bij de klimzaal",
-      "Bestemming/land bepalen",
-      "Data vastleggen (vertrek-/terugkeerdatum)",
-      "Begeleidersteam + rollen bevestigen",
-      "Buskalender doorgeven aan klimzaal"
+      { t: "Aanvraag bergkamp bij de klimzaal", voor: 300 },
+      { t: "Bestemming/land bepalen", voor: 280 },
+      { t: "Data vastleggen (vertrek-/terugkeerdatum)", voor: 270 },
+      { t: "Begeleidersteam + rollen bevestigen", voor: 260 },
+      // Fundament.md stelt 1 februari voor als deadline; dat is ± 180 dagen
+      // voor een vertrek eind juli.
+      { t: "Buskalender doorgeven aan klimzaal", voor: 180 }
     ]},
     { phase: "Route & verblijf", steps: [
-      "Routes en hutten bepalen (routedatabank raadplegen)",
-      "Reservering hutten in orde",
-      "Reservering camping (basiskamp) in orde",
-      "Prospectie plannen (indien nieuwe bestemming)"
+      { t: "Routes en hutten bepalen (routedatabank raadplegen)", voor: 240 },
+      // Te laat boeken is een van de pijnpunten uit Fundament.md: vandaar ruim.
+      { t: "Reservering hutten in orde", voor: 210 },
+      { t: "Reservering camping (basiskamp) in orde", voor: 200 },
+      { t: "Prospectie plannen (indien nieuwe bestemming)", voor: 150 }
     ]},
     { phase: "Erkenning & kampadministratie", steps: [
-      "Technische fiche opstellen/actualiseren",
-      "Toelatingssjabloon buitenland actualiseren (namen begeleiders)",
-      "Verzekering nakijken (niet-Bleau-leden)"
+      // Moet klaar zijn vóór het infomoment: ouders krijgen ze daar te zien.
+      { t: "Technische fiche opstellen/actualiseren", voor: 220 },
+      { t: "Toelatingssjabloon buitenland actualiseren (namen begeleiders)", voor: 120 },
+      { t: "Verzekering nakijken (niet-Bleau-leden)", voor: 90 }
     ]},
     { phase: "Werving & inschrijvingen", steps: [
-      "Infomoment plannen",
-      "Inschrijvingsmodule openzetten",
-      "Inschrijvingen opvolgen (aantal deelnemers)"
+      { t: "Infomoment plannen", voor: 215 },
+      // De aankondiging van 2026 zette de inschrijvingen open op 1 januari.
+      { t: "Inschrijvingsmodule openzetten", voor: 200 },
+      { t: "Inschrijvingen opvolgen (aantal deelnemers)", voor: 120 }
     ]},
     { phase: "Deelnemers- & vrijwilligersadministratie", steps: [
-      "Medische fiches verzamelen + doorsturen naar hoofdvrijwilliger",
-      "Toelatingsformulieren naar ouders + legalisatie opvolgen",
-      "Vrijwilligerscontracten opmaken en versturen",
-      "Tentverdeling maken"
+      { t: "Medische fiches verzamelen + doorsturen naar hoofdvrijwilliger", voor: 60 },
+      // Ouders moeten hiermee fysiek naar het gemeentehuis: ruim op tijd sturen.
+      { t: "Toelatingsformulieren naar ouders + legalisatie opvolgen", voor: 90 },
+      { t: "Vrijwilligerscontracten opmaken en versturen", voor: 60 },
+      { t: "Tentverdeling maken", voor: 21 }
     ]},
     { phase: "Logistiek & materiaal", steps: [
-      "Boodschappenlijst eerste dagen",
-      "Paklijst materiaal klimzaal controleren (container)",
-      "Busjes reserveren bij de klimzaal"
+      { t: "Boodschappenlijst eerste dagen", voor: 14 },
+      // Bewust ruim vóór de vertrekochtend, precies de aanbeveling uit Fundament.md.
+      { t: "Paklijst materiaal klimzaal controleren (container)", voor: 21 },
+      { t: "Busjes reserveren bij de klimzaal", voor: 45 }
     ]},
     { phase: "Planning & veiligheid", steps: [
-      "Planning/draaiboek invullen",
-      "Noodprotocol + achterwachtpersoon vastleggen",
-      "Noodnummer pechbijstand auto's",
-      "Noodnummer ter plekke (lokale hulpdiensten)",
-      "Noodnummer klimzaal"
+      { t: "Planning/draaiboek invullen", voor: 30 },
+      { t: "Noodprotocol + achterwachtpersoon vastleggen", voor: 30 },
+      { t: "Noodnummer pechbijstand auto's", voor: 14 },
+      { t: "Noodnummer ter plekke (lokale hulpdiensten)", voor: 14 },
+      { t: "Noodnummer klimzaal", voor: 14 }
     ]},
     { phase: "Vlak voor vertrek", steps: [
-      "Alle medische fiches binnen en gecontroleerd",
-      "Alle toelatingsformulieren gelegaliseerd binnen",
-      "Materiaal/busje opgehaald (checklist afgetekend met klimzaal)"
+      { t: "Alle medische fiches binnen en gecontroleerd", voor: 7 },
+      { t: "Alle toelatingsformulieren gelegaliseerd binnen", voor: 7 },
+      { t: "Materiaal/busje opgehaald (checklist afgetekend met klimzaal)", voor: 1 }
     ]},
     { phase: "Na het kamp", steps: [
-      "Evaluatie met de begeleiders",
-      "Routedatabank aanvullen met ervaringen",
-      "Financieel overzicht afronden"
+      { t: "Evaluatie met de begeleiders", na: 14 },
+      { t: "Routedatabank aanvullen met ervaringen", na: 21 },
+      { t: "Financieel overzicht afronden", na: 30 }
     ]}
   ];
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "2.1";
+  var VERSION = "2.2";
   var CHANGELOG = [
+    { version: "2.2", date: "2026-09-20", changes: [
+      "Een nieuw kamp krijgt meteen een volledige planning: elke stap krijgt een streefdatum, gerekend vanaf de vertrekdatum",
+      "Knop \"Datums invullen\" voor bestaande kampen, die enkel de lege datums aanvult",
+      "Daardoor werken het paneel met dringende stappen en de herinneringsmails nu vanzelf"
+    ]},
     { version: "2.1", date: "2026-09-20", changes: [
       "Knop \"Routedatabank\" op elke kampkaart, die de gedeelde map in Drive opent",
       "De voorstellingspagina heeft nu een fotogedeelte en een afdrukbare versie"
@@ -516,12 +541,79 @@ var KV = (function () {
     return steps.filter(function (s) { return s.campId === campId; });
   }
 
-  function buildDefaultSteps() {
+  /** Telt dagen op bij een jjjj-mm-dd-datum en geeft weer jjjj-mm-dd terug.
+   *  Rekent in UTC, zodat een zomeruur-overgang geen dag verschuift. */
+  function shiftDate(dateStr, days) {
+    var clean = normalizeDateStr(dateStr);
+    if (!clean) return "";
+    var p = clean.split("-");
+    var d = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2])));
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.getUTCFullYear() + "-" +
+      String(d.getUTCMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getUTCDate()).padStart(2, "0");
+  }
+
+  /** De streefdatum van één standaardstap voor een concreet kamp.
+   *  "voor" rekent terug vanaf de vertrekdatum, "na" telt verder vanaf de
+   *  terugkeerdatum (of vanaf het vertrek als die niet ingevuld is).
+   *  Zonder vertrekdatum blijft de streefdatum leeg — zoals vroeger. */
+  function defaultStepDate(step, camp) {
+    if (!camp || !camp.startDate) return "";
+    if (typeof step.voor === "number") return shiftDate(camp.startDate, -step.voor);
+    if (typeof step.na === "number") return shiftDate(camp.endDate || camp.startDate, step.na);
+    return "";
+  }
+
+  /** De standaardchecklist, klaar om te versturen. Geef `camp` mee en elke stap
+   *  krijgt meteen een streefdatum; laat je hem weg, dan blijven die leeg. */
+  function buildDefaultSteps(camp) {
     var flat = [], order = 0;
     DEFAULT_CHECKLIST.forEach(function (group) {
-      group.steps.forEach(function (title) { flat.push({ phase: group.phase, title: title, order: order++ }); });
+      group.steps.forEach(function (step) {
+        flat.push({
+          phase: group.phase,
+          title: step.t,
+          order: order++,
+          targetDate: defaultStepDate(step, camp)
+        });
+      });
     });
     return flat;
+  }
+
+  /** Zoekt voor een BESTAAND kamp welke stappen nog geen streefdatum hebben en
+   *  wél in de standaardchecklist voorkomen, en berekent die datum alsnog.
+   *  Bestaande datums worden nooit overschreven — wie zelf iets invulde, houdt
+   *  dat. Geeft een lijst {id, targetDate} terug, leeg als er niets te doen is. */
+  function missingStepDates(camp, campSteps) {
+    if (!camp || !camp.startDate) return [];
+    var uit = [];
+    (campSteps || []).forEach(function (s) {
+      if (s.targetDate) return;                     // al ingevuld: afblijven
+      var datum = targetDateForTitle(s.title, camp); // "" bij een zelf toegevoegde stap
+      if (datum) uit.push({ id: s.id, targetDate: datum });
+    });
+    return uit;
+  }
+
+  /* Titel -> standaardstap, één keer opgebouwd. Wordt gebruikt om een datum te
+     vinden voor een stap die al bestaat (bij "Datums invullen" en bij het
+     dupliceren van een kamp). */
+  var STAP_PER_TITEL = (function () {
+    var m = {};
+    DEFAULT_CHECKLIST.forEach(function (group) {
+      group.steps.forEach(function (step) { m[step.t] = step; });
+    });
+    return m;
+  })();
+
+  /** De streefdatum die bij deze staptitel hoort voor dit kamp, of "" wanneer
+   *  de titel niet in de standaardchecklist staat of het kamp geen vertrekdatum
+   *  heeft. */
+  function targetDateForTitle(title, camp) {
+    var sjabloon = STAP_PER_TITEL[title];
+    return sjabloon ? defaultStepDate(sjabloon, camp) : "";
   }
 
   /* ---------------- API laag (Google Apps Script) ---------------- */
@@ -649,6 +741,8 @@ var KV = (function () {
       byPhase[s.phase].push(s);
     });
 
+    var ontbrekendeDatums = missingStepDates(camp, campSteps);
+
     // Eén suggestielijst per kamp, gevuld met de begeleiders van dat kamp.
     var campGuides = begeleiderOptions(camp);
     var datalistId = campGuides.length ? "begeleiders-" + camp.id : "";
@@ -694,6 +788,13 @@ var KV = (function () {
             '<a class="btn small" href="fiche.html?id=' + encodeURIComponent(camp.id) + '" target="_blank" rel="noopener">Fiche afdrukken</a>' +
             '<button type="button" class="btn small" data-edit="' + camp.id + '">Bewerken</button>' +
             (opts.duplicable ? '<button type="button" class="btn small" data-duplicate="' + camp.id + '">Dupliceren</button>' : '') +
+            // Verschijnt enkel wanneer er ook effectief iets in te vullen valt.
+            (opts.stepsEditable && ontbrekendeDatums.length
+              ? '<button type="button" class="btn small" data-fill-dates="' + camp.id +
+                '" title="Zet een streefdatum op de ' + ontbrekendeDatums.length +
+                ' stappen die er nog geen hebben, gerekend vanaf de vertrekdatum. Bestaande datums blijven ongemoeid.">Datums invullen (' +
+                ontbrekendeDatums.length + ')</button>'
+              : '') +
             '<button type="button" class="btn small" data-archive-toggle="' + camp.id + '" data-archive-value="' + (camp.archived ? "false" : "true") + '">' + (camp.archived ? "Terug naar actief" : "Archiveren") + '</button>' +
           '</div>' +
         '</div>' +
@@ -755,6 +856,11 @@ var KV = (function () {
         var id = inp.getAttribute("data-step-owner");
         apiPost("updateStep", { id: id, fields: { owner: inp.value.trim() } }).then(handlers.onSaved).catch(handlers.onError);
       });
+    });
+
+    var fillBtn = card.querySelector('[data-fill-dates]');
+    if (fillBtn && handlers.onFillDates) fillBtn.addEventListener("click", function () {
+      handlers.onFillDates(camp);
     });
 
     var dupBtn = card.querySelector('[data-duplicate]');
@@ -840,6 +946,7 @@ var KV = (function () {
     normalizeDateStr: normalizeDateStr, formatDateNL: formatDateNL, boolish: boolish, formatEUR: formatEUR, stepStatusClass: stepStatusClass,
     openConnectionDialog: openConnectionDialog,
     typeLabel: typeLabel, stepsForCamp: stepsForCamp, buildDefaultSteps: buildDefaultSteps,
+    missingStepDates: missingStepDates, targetDateForTitle: targetDateForTitle, shiftDate: shiftDate,
     landVanBestemming: landVanBestemming, routedatabankKnop: routedatabankKnop,
     addStepToCamp: addStepToCamp,
     begeleiderOptions: begeleiderOptions,

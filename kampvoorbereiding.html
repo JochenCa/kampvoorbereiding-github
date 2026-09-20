@@ -303,6 +303,7 @@
         onDuplicate: openDuplicateForm,
         onAddStep: addStep,
         onDeleteStep: deleteStep,
+        onFillDates: fillDates,
         onSaved: refresh,
         onError: showApiError
       });
@@ -371,6 +372,25 @@
     KV.addStepToCamp(campId, phase, title, KV.stepsForCamp(steps, campId))
       .then(refresh)
       .catch(showApiError);
+  }
+
+  /** Vult de ontbrekende streefdatums van een bestaand kamp in, gerekend vanaf
+   *  de vertrekdatum. Bestaande datums blijven staan. Eén aanroep per stap, maar
+   *  de pagina ververst pas na afloop zodat ze niet bij elke stap opspringt. */
+  function fillDates(camp) {
+    if (KV.SETUP_NEEDED) return;
+    var teVullen = KV.missingStepDates(camp, KV.stepsForCamp(steps, camp.id));
+    if (!teVullen.length) {
+      alert("Er zijn geen stappen zonder streefdatum, of dit kamp heeft nog geen vertrekdatum.");
+      return;
+    }
+    if (!window.confirm(
+      teVullen.length + " stappen krijgen een streefdatum, gerekend vanaf de vertrekdatum van \"" +
+      camp.name + "\". Datums die je zelf al invulde, blijven ongewijzigd. Doorgaan?")) return;
+
+    Promise.all(teVullen.map(function (r) {
+      return KV.apiPost("updateStep", { id: r.id, fields: { targetDate: r.targetDate } });
+    })).then(refresh).catch(showApiError);
   }
 
   function deleteStep(stepId, title) {
@@ -451,7 +471,7 @@
 
     // Bij een duplicaat nemen we de stappenlijst van het bronkamp over — zonder
     // vinkjes en zonder datums, want die horen bij de vorige editie.
-    var nieuweStappen = KV.buildDefaultSteps();
+    var nieuweStappen = KV.buildDefaultSteps(campPayload);
     if (duplicateFromId) {
       var bron = KV.stepsForCamp(steps, duplicateFromId);
       if (bron.length) {
@@ -459,7 +479,12 @@
           .slice()
           .sort(function (a, b) { return (Number(a.order) || 0) - (Number(b.order) || 0); })
           .map(function (st, i) {
-            return { phase: st.phase, title: st.title, order: i, owner: st.owner || "" };
+            return {
+              phase: st.phase, title: st.title, order: i, owner: st.owner || "",
+              // Niet de datums van het bronkamp overnemen: die horen bij dat jaar.
+              // Opnieuw berekenen vanaf de vertrekdatum van het nieuwe kamp.
+              targetDate: KV.targetDateForTitle(st.title, campPayload)
+            };
           });
       }
     }
