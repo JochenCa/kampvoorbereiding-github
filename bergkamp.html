@@ -282,7 +282,7 @@ footer .mono{font-family:var(--font-mono)}
         {d:"5", hut:"Afdaling naar St. Jakob"}
       ],
       opmerking:"De afstanden en staptijden in de presentatie van dat jaar bleken woordelijk overgenomen uit een eerdere editie in een ander gebergte. Ze staan hier daarom niet bij."},
-    { jaar:2025, label:"2025", naam:"Jura — winterkamp", plaats:"Jura, grens met Zwitserland", land:"Frankrijk",
+    { jaar:2025, label:"2025", naam:"Jura (winterkamp)", plaats:"Jura, grens met Zwitserland", land:"Frankrijk",
       pos:[46.153,5.947], niveau:"winterkamp", deelnemers:"max 6", winter:true,
       tekst:"Vijf stapdagen in de paasvakantie, met tenten bij onbemande hutten en nachttemperaturen onder nul. Een kamp voor wie al ervaring heeft.",
       etappes:[{d:"—", hut:"Onbemande hutten, in eigen tent", c:"5 stapdagen · laatste nacht in een hotel"}]},
@@ -297,7 +297,7 @@ footer .mono{font-family:var(--font-mono)}
         {d:"5", hut:"Afdaling naar Servoz", c:"aankomst 15u"}
       ],
       opmerking:"In augustus ging er een driedaagse voor jongeren naar dezelfde streek; welke hutten die gebruikte, is niet bewaard gebleven."},
-    { jaar:2024, label:"2024", naam:"Bohinj — huttentocht", plaats:"Meer van Bohinj", land:"Slovenië",
+    { jaar:2024, label:"2024", naam:"Bohinj (huttentocht)", plaats:"Meer van Bohinj", land:"Slovenië",
       pos:[46.277,13.881], niveau:"geen bergkamp", deelnemers:"max 7",
       tekst:"Geen bergkamp, maar een huttentocht voor volwassenen die via de klimzaal georganiseerd werd, met eigen tochtbegeleiders. Ze staat hier omdat de route en de ervaringen in dezelfde databank bewaard zijn: 600 tot 1000 hoogtemeter per dag, en water enkel in het begin van de tocht.",
       etappes:[{d:"—", hut:"Vier berghutten", c:"5 stapdagen · +600 tot +1000 hm per dag"}]},
@@ -521,7 +521,7 @@ footer .mono{font-family:var(--font-mono)}
   var rijen = EDITIES.map(function (e, i) {
     return '<div class="editie' + (e.winter ? " winter" : "") + '">' +
       '<div class="jaar">' + esc(e.jaar) + "</div>" +
-      "<h4>" + esc(e.naam) + " — " + esc(e.land) + "</h4>" +
+      "<h4>" + esc(e.land) + " — " + esc(e.naam) + "</h4>" +
       '<div class="regel">' + esc(e.plaats) + " · " + esc(e.niveau) +
         (e.deelnemers && e.deelnemers !== "—" ? " · " + esc(e.deelnemers) : "") + "</div>" +
       (PRINTMODUS
