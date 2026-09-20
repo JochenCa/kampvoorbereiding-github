@@ -3,7 +3,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Bergkamp — Bleau Climbing Team</title>
-<meta name="description" content="Twaalf jaar bergkampen: bestemmingen, berghutten en hoe een kampweek eruitziet.">
+<meta name="description" content="Dertien zomers met jongeren de bergen in: waar we geweest zijn, welke berghutten, en hoe een kampweek verloopt.">
+
+<!-- Wat er verschijnt wanneer deze link doorgestuurd wordt via WhatsApp, mail
+     of Teams. De afbeelding wordt gemaakt met _maak-deelkaart.js en moet een
+     volledige https-link zijn, geen relatief pad — anders tonen de meeste
+     diensten niets. Verandert het adres van de site, pas dan deze twee aan. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bleau Climbing Team">
+<meta property="og:locale" content="nl_BE">
+<meta property="og:title" content="Bergkamp — Bleau Climbing Team">
+<meta property="og:description" content="Dertien zomers met jongeren de bergen in: waar we geweest zijn, welke berghutten, en hoe een kampweek verloopt.">
+<meta property="og:url" content="https://jochenca.github.io/kampvoorbereiding-github/bergkamp.html">
+<meta property="og:image" content="https://jochenca.github.io/kampvoorbereiding-github/deelkaart.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Bergkamp — dertien zomers, zes landen, meer dan twintig berghutten">
+<meta name="twitter:card" content="summary_large_image">
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -86,6 +102,23 @@ section + section{border-top:1px solid var(--line)}
 .detail .opmerking{font-size:13px;font-style:italic;color:var(--ink-soft);border-top:1px solid var(--line);
   margin:14px 0 0;padding-top:12px}
 
+/* ---------- foto's ---------- */
+.fotos{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.foto{border-radius:10px;overflow:hidden;background:var(--surface);border:1px solid var(--line)}
+.foto img{display:block;width:100%;aspect-ratio:3/2;object-fit:cover}
+.foto figcaption{font-size:13px;color:var(--ink-soft);padding:11px 14px}
+/* Plaatshouder: toont welk beeld hier hoort en onder welke bestandsnaam. */
+.foto.leeg{border-style:dashed;border-color:var(--line-strong);background:var(--surface-2)}
+.foto.leeg .vak{aspect-ratio:3/2;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:7px;padding:16px;text-align:center;color:var(--ink-soft)}
+.foto.leeg .wat{font-size:14px;font-weight:500;color:var(--ink)}
+.foto.leeg .hoe{font-size:12.5px;line-height:1.45;max-width:26ch}
+.foto.leeg .naam{font-family:var(--font-mono);font-size:11px;background:var(--surface);
+  border:1px solid var(--line);border-radius:5px;padding:3px 8px;color:var(--accent)}
+.fotos-nb{margin-top:16px;font-size:13.5px;color:var(--ink-soft);border-left:3px solid var(--warm);
+  background:var(--surface);border-radius:8px;padding:14px 16px}
+.fotos-nb strong{color:var(--ink)}
+
 /* ---------- tijdlijn edities ---------- */
 .tijdlijn{position:relative;padding-left:22px}
 .tijdlijn::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--line-strong)}
@@ -99,6 +132,33 @@ section + section{border-top:1px solid var(--line)}
 .editie .regel{font-size:14px;color:var(--ink-soft)}
 .editie button{background:none;border:0;padding:0;margin-top:6px;color:var(--accent);font:inherit;font-size:13.5px;
   cursor:pointer;text-decoration:underline}
+
+/* ---------- printmodus en afdrukken ---------- */
+/* In een PDF kan je niet klikken, dus staat het detail onder elke editie en
+   verdwijnt het zijpaneel. Zie _maak-presentatie-pdf.js. */
+.editie-detail{background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  padding:14px 16px;margin-top:10px}
+.editie-detail .plaats{display:none}
+.editie-detail h3{display:none}
+.editie-detail .meta{margin:0 0 10px}
+.editie-detail p{font-size:13.5px}
+body.printmodus .detail{display:none}
+body.printmodus .kaart-grid{grid-template-columns:1fr}
+body.printmodus #kaart{height:330px}
+body.printmodus .kaart-hint{display:none}
+
+@media print{
+  :root{--bg:#fff;--surface:#fff;--surface-2:#f4f6f5}
+  body{font-size:11pt}
+  .hero{padding:0 0 18px}
+  section{padding:20px 0;break-inside:avoid}
+  .detail,.kaart-hint{display:none}
+  .kaart-grid{grid-template-columns:1fr}
+  #kaart{height:280px}
+  /* Een editie of een dagkaart mag niet over twee bladzijden gesplitst worden. */
+  .editie,.dag,.foto,.nb,.cijfer{break-inside:avoid}
+  .tijdlijn::before{background:#bbb}
+}
 
 /* ---------- kampweek ---------- */
 .week{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px}
@@ -138,6 +198,14 @@ footer .mono{font-family:var(--font-mono)}
     </div>
   </header>
 
+  <section id="fotos-sectie">
+    <div class="sectiekop">
+      <h2>Hoe het eruitziet</h2>
+      <p>Vier beelden van onderweg: het basiskamp, de tocht, een berghut en het uitzicht dat je krijgt als je er geraakt.</p>
+    </div>
+    <div class="fotos" id="fotos"></div>
+  </section>
+
   <section>
     <div class="sectiekop">
       <h2>Waar we geweest zijn</h2>
@@ -161,7 +229,7 @@ footer .mono{font-family:var(--font-mono)}
 
   <section>
     <div class="sectiekop">
-      <h2>Twaalf jaar, editie per editie</h2>
+      <h2>Dertien zomers, editie per editie</h2>
       <p>Wat begon met zeven deelnemers en twee begeleiders, groeide uit tot groepen van dertig — en sinds 2023 tot meerdere kampen per jaar, voor jongeren, voor achttienplussers en voor volwassenen.</p>
     </div>
     <div class="tijdlijn" id="tijdlijn"></div>
@@ -327,6 +395,62 @@ footer .mono{font-family:var(--font-mono)}
       ["18–20u","aankomst in Gent"]]}
   ];
 
+  /* Printmodus (bergkamp.html?print=1): alles staat open, want in een PDF kan
+   * je niet doorklikken. Wordt gebruikt door _maak-presentatie-pdf.js. */
+  var PRINTMODUS = new URLSearchParams(location.search).has("print");
+  if (PRINTMODUS) document.body.classList.add("printmodus");
+
+  /* ---------------- foto's ----------------
+   * Zet een foto in deze map onder de naam die hieronder bij 'bestand' staat,
+   * en verwijder dan het woord 'plaatshouder' in die regel — meer is er niet
+   * nodig. Formaat: liggend, 3:2 (bv. 1500 x 1000), onder 400 KB.
+   * Geen herkenbare deelnemers: deze pagina is publiek en heeft geen code. */
+  var FOTOS = [
+    { bestand: "foto-basiskamp.jpg", plaatshouder: true,
+      wat: "Het basiskamp",
+      hoe: "De tenten op de camping, liefst met de bergen erachter. Van veraf of van achter genomen.",
+      bijschrift: "Het basiskamp, waar de week begint en eindigt." },
+    { bestand: "foto-onderweg.jpg", plaatshouder: true,
+      wat: "Onderweg",
+      hoe: "De groep op een pad of een col, van achteren of als silhouet. Rugzakken mogen groot in beeld.",
+      bijschrift: "Van hut naar hut, met alles op de rug." },
+    { bestand: "foto-hut.jpg", plaatshouder: true,
+      wat: "Een berghut",
+      hoe: "De hut zelf, van buiten, in het landschap. Geen tafereel met gezichten eromheen.",
+      bijschrift: "Drie nachten in een bemande berghut." },
+    { bestand: "foto-uitzicht.jpg", plaatshouder: true,
+      wat: "Het uitzicht",
+      hoe: "Puur landschap, zonder mensen. Dit is het beeld dat blijft hangen.",
+      bijschrift: "Waarvoor je het doet." }
+  ];
+
+  function renderFotos() {
+    var slot = document.getElementById("fotos");
+    var teVullen = 0;
+    slot.innerHTML = FOTOS.map(function (f) {
+      if (f.plaatshouder) {
+        teVullen++;
+        return '<figure class="foto leeg"><div class="vak">' +
+          '<span class="wat">' + esc(f.wat) + "</span>" +
+          '<span class="hoe">' + esc(f.hoe) + "</span>" +
+          '<span class="naam">' + esc(f.bestand) + "</span>" +
+        "</div></figure>";
+      }
+      return '<figure class="foto"><img src="' + esc(f.bestand) + '" alt="' + esc(f.bijschrift) +
+        '" loading="lazy"><figcaption>' + esc(f.bijschrift) + "</figcaption></figure>";
+    }).join("");
+
+    if (teVullen) {
+      var nb = document.createElement("div");
+      nb.className = "fotos-nb";
+      nb.innerHTML = "<strong>Nog " + teVullen + " van de 4 foto's te kiezen.</strong> " +
+        "Zet ze in dezelfde map als deze pagina, onder de naam die in het vak staat. " +
+        "Liggend, verhouding 3:2, onder 400 KB per stuk. " +
+        "<strong>Geen herkenbare deelnemers</strong> — deze pagina is publiek en vraagt geen toegangscode.";
+      slot.parentNode.appendChild(nb);
+    }
+  }
+
   /* ---------------- kaart ---------------- */
   var kaart = L.map("kaart", { scrollWheelZoom:false }).setView([45.9, 7.5], 5);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -371,10 +495,8 @@ footer .mono{font-family:var(--font-mono)}
     });
   }
 
-  function toon(i) {
-    var e = EDITIES[i];
-    document.getElementById("detail").innerHTML =
-      '<div class="plaats">' + esc(e.land) + '</div>' +
+  function detailHtml(e) {
+    return '<div class="plaats">' + esc(e.land) + '</div>' +
       "<h3>" + esc(e.naam) + "</h3>" +
       '<div class="meta"><span class="tag' + (e.winter ? " winter" : "") + '">' + esc(e.jaar) + "</span>" +
         '<span class="tag">' + esc(e.niveau) + "</span>" +
@@ -386,6 +508,10 @@ footer .mono{font-family:var(--font-mono)}
                "</span>" + (t.c ? "<span class='cijfers-klein'>" + esc(t.c) + "</span>" : "") + "</span></li>";
       }).join("") + "</ul>" +
       (e.opmerking ? '<p class="opmerking">' + esc(e.opmerking) + "</p>" : "");
+  }
+
+  function toon(i) {
+    document.getElementById("detail").innerHTML = detailHtml(EDITIES[i]);
     markeerActief(i);
     document.getElementById("detail").scrollIntoView({ behavior:"smooth", block:"nearest" });
   }
@@ -398,7 +524,9 @@ footer .mono{font-family:var(--font-mono)}
       "<h4>" + esc(e.naam) + " — " + esc(e.land) + "</h4>" +
       '<div class="regel">' + esc(e.plaats) + " · " + esc(e.niveau) +
         (e.deelnemers && e.deelnemers !== "—" ? " · " + esc(e.deelnemers) : "") + "</div>" +
-      '<button type="button" data-i="' + i + '">Route bekijken</button>' +
+      (PRINTMODUS
+        ? '<div class="editie-detail">' + detailHtml(e) + "</div>"
+        : '<button type="button" data-i="' + i + '">Route bekijken</button>') +
     "</div>";
   }).concat(ZONDER_KAART.map(function (e) {
     return '<div class="editie onbekend"><div class="jaar">' + esc(e.jaar) + "</div>" +
@@ -413,6 +541,8 @@ footer .mono{font-family:var(--font-mono)}
     kaart.setView(EDITIES[i].pos, 8, { animate:true });
     document.getElementById("kaart").scrollIntoView({ behavior:"smooth", block:"center" });
   });
+
+  renderFotos();
 
   /* ---------------- kampweek ---------------- */
   document.getElementById("week").innerHTML = WEEK.map(function (d) {

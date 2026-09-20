@@ -1,2 +1,25 @@
+# De site hoort niet in zoekresultaten: ze is enkel bedoeld voor wie de link krijgt.
 User-agent: *
 Disallow: /
+
+# Uitzondering voor de bots die enkel een voorbeeldkaartje ophalen wanneer
+# iemand de link doorstuurt. Die indexeren niets; ze lezen alleen de
+# og:-gegevens van de pagina. Zonder deze regels blijft zo'n gedeelde link
+# een kale URL zonder titel of afbeelding.
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Slackbot-LinkExpanding
+Allow: /
+
+User-agent: TelegramBot
+Allow: /

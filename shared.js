@@ -177,8 +177,12 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "2.0";
+  var VERSION = "2.1";
   var CHANGELOG = [
+    { version: "2.1", date: "2026-09-20", changes: [
+      "Knop \"Routedatabank\" op elke kampkaart, die de gedeelde map in Drive opent",
+      "De voorstellingspagina heeft nu een fotogedeelte en een afdrukbare versie"
+    ]},
     { version: "2.0", date: "2026-09-20", changes: [
       "Je kan nu zelf een stap toevoegen aan een kamp, per fase, en een stap weer verwijderen",
       "Knop \"Dupliceren\": maak een nieuw kamp op basis van een bestaand of gearchiveerd kamp, mét dezelfde stappenlijst",
@@ -269,6 +273,20 @@ var KV = (function () {
 
   var TYPE_LABELS = { "-18": "-18-kamp", "+18": "+18-kamp", "winter": "Winterkamp" };
   var EXPENSE_CATEGORIES = ["Boodschappen", "Restaurant", "Vervoer", "Verblijf", "Materiaal", "Andere"];
+
+  /* De gedeelde map in Drive waar de routedatabank staat. Voorlopig wijst elk
+     kamp naar de hoofdmap: de submappen per land hebben hun eigen Drive-link
+     en die kennen we nog niet. Zet zo'n link hieronder bij het juiste land en
+     de knop springt er meteen rechtstreeks naartoe — er hoeft verder niets te
+     veranderen. Je vindt hem via rechtermuisknop op de map -> Link kopieren. */
+  var ROUTEDATABANK_MAP = "https://drive.google.com/drive/folders/1zXCf4p8mV78XDBiR2hVZTLlzB-pAEpsx";
+  var ROUTEDATABANK_LANDEN = {
+    frankrijk: "", duitsland: "", italie: "", oostenrijk: "", slovenie: "", spanje: ""
+  };
+  var LANDLABELS = {
+    frankrijk: "Frankrijk", duitsland: "Duitsland", italie: "Italië",
+    oostenrijk: "Oostenrijk", slovenie: "Slovenië", spanje: "Spanje"
+  };
   var SETUP_NEEDED = !CONFIG.API_URL || !CONFIG.ACCESS_KEY || CONFIG.API_URL.indexOf("PASTE_") === 0;
   var DRAFT_KEY = "kampvoorbereiding:new-camp-draft:v1";
 
@@ -278,6 +296,42 @@ var KV = (function () {
     });
   }
   function cssEscape(s) { return String(s).replace(/["\\]/g, "\\$&"); }
+
+  /** Klein-letters zonder accenten, zodat "Italië" en "Italie" allebei herkend
+   *  worden in een vrij ingetypte bestemming. */
+  function zonderAccenten(s) {
+    return String(s == null ? "" : s).toLowerCase()
+      .replace(/[àáâãä]/g, "a").replace(/[èéêë]/g, "e").replace(/[ìíîï]/g, "i")
+      .replace(/[òóôõö]/g, "o").replace(/[ùúûü]/g, "u").replace(/ç/g, "c");
+  }
+
+  /** Zoekt het land in de vrij ingetypte bestemming van een kamp.
+   *  Geeft null wanneer er geen land in staat (bv. enkel een streeknaam). */
+  function landVanBestemming(destination) {
+    var tekst = zonderAccenten(destination);
+    for (var sleutel in ROUTEDATABANK_LANDEN) {
+      if (Object.prototype.hasOwnProperty.call(ROUTEDATABANK_LANDEN, sleutel) &&
+          tekst.indexOf(sleutel) !== -1) return sleutel;
+    }
+    return null;
+  }
+
+  /** De link achter de knop "Routedatabank" op een kampkaart, plus de tekst die
+   *  als tooltip verschijnt. Zolang er geen link per land ingevuld is, gaat de
+   *  knop naar de hoofdmap en zegt de tooltip welke submap je zoekt. */
+  function routedatabankKnop(camp) {
+    var land = landVanBestemming(camp && camp.destination);
+    var directeLink = land ? ROUTEDATABANK_LANDEN[land] : "";
+    if (directeLink) {
+      return { href: directeLink, titel: "Opent de routedatabank voor " + LANDLABELS[land] };
+    }
+    return {
+      href: ROUTEDATABANK_MAP,
+      titel: land
+        ? "Opent de gedeelde map — zoek daarin Routedatabank, landen, " + LANDLABELS[land]
+        : "Opent de gedeelde map met de routedatabank. Zet het land bij de bestemming om rechtstreeks bij het juiste land uit te komen."
+    };
+  }
 
   function todayStr() {
     var d = new Date();
@@ -632,6 +686,11 @@ var KV = (function () {
           '<button type="button" class="btn small danger" data-delete="' + camp.id + '" data-delete-name="' + escapeHtml(camp.name) + '">Verwijderen</button>' +
           '<div class="camp-actions-right">' +
             '<a class="btn small" href="budget.html?id=' + encodeURIComponent(camp.id) + '">Budget</a>' +
+            (function () {
+              var rd = routedatabankKnop(camp);
+              return '<a class="btn small" href="' + escapeHtml(rd.href) + '" target="_blank" rel="noopener"' +
+                ' title="' + escapeHtml(rd.titel) + '">Routedatabank</a>';
+            })() +
             '<a class="btn small" href="fiche.html?id=' + encodeURIComponent(camp.id) + '" target="_blank" rel="noopener">Fiche afdrukken</a>' +
             '<button type="button" class="btn small" data-edit="' + camp.id + '">Bewerken</button>' +
             (opts.duplicable ? '<button type="button" class="btn small" data-duplicate="' + camp.id + '">Dupliceren</button>' : '') +
@@ -781,6 +840,7 @@ var KV = (function () {
     normalizeDateStr: normalizeDateStr, formatDateNL: formatDateNL, boolish: boolish, formatEUR: formatEUR, stepStatusClass: stepStatusClass,
     openConnectionDialog: openConnectionDialog,
     typeLabel: typeLabel, stepsForCamp: stepsForCamp, buildDefaultSteps: buildDefaultSteps,
+    landVanBestemming: landVanBestemming, routedatabankKnop: routedatabankKnop,
     addStepToCamp: addStepToCamp,
     begeleiderOptions: begeleiderOptions,
     parseGuides: parseGuides, formatGuides: formatGuides, guideNames: guideNames,
