@@ -39,7 +39,6 @@
   <footer class="foot">Administratie bergkamp | ontwerp door JochenCa</footer>
 </div>
 
-<datalist id="begeleiders-list"></datalist>
 
 <script src="shared.js"></script>
 <script>
@@ -59,7 +58,6 @@
   var runtime = KV.createPageRuntime({
     onData: function (data) {
       camps = data.camps; steps = data.steps;
-      KV.renderBegeleiderDatalist(camps);
     },
     render: function () { renderForm(); renderCamps(); }
   });
@@ -252,7 +250,6 @@
     var camp = camps.find(function (c) { return c.id === editedId; });
     if (camp) Object.assign(camp, fields);
     closeForm();
-    KV.renderBegeleiderDatalist(camps);
 
     KV.apiPost("updateCamp", { id: editedId, fields: fields }).catch(function (err) {
       alert("Opslaan is mislukt: " + (err && err.message ? err.message : "onbekende fout") + ". De laatst bekende stand wordt opnieuw geladen.");

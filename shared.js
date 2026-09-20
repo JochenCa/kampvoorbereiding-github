@@ -10,31 +10,35 @@ var KV = (function () {
   "use strict";
 
   /* ============ CONFIGURATIE ============
-     Vul hieronder de Web-app-URL in die je krijgt na het deployen van
-     apps-script.gs (zie README.md). Alle pagina's gebruiken deze ene
-     instelling. Op de publiek gehoste (GitHub Pages) versie staat dit veld
-     bewust LEEG — daar vult elke begeleider de link eenmalig zelf in via het
-     invoervak dat dan verschijnt; die wordt lokaal in de browser onthouden
-     (localStorage), nooit in de broncode. */
+     De Web-app-URL staat hier vast ingevuld, óók in de publieke GitHub-versie.
+     Die link alleen geeft geen toegang: de backend weigert elke aanvraag
+     zonder de juiste toegangscode. Het voordeel is dat niemand die lange URL
+     nog moet overtypen, en dat één aangepaste regel hier volstaat wanneer er
+     een nieuwe Apps Script-deployment komt — iedereen zit dan meteen goed.
+
+     De TOEGANGSCODE staat bewust NIET in de publieke versie. Die vult elke
+     begeleider eenmalig zelf in; de browser onthoudt ze daarna. */
   var CONFIG = {
-    API_URL: "",
+    API_URL: "https://script.google.com/macros/s/AKfycbyrdNbFXNBlH5iUPu4cdve8fboTRLVTuqOi0DTL5DLNQOJIZKI7PXG0ycDdEU50QYCS/exec",
     ACCESS_KEY: "",
     POLL_MS: 10000
   };
   /* ======================================= */
 
-  var API_URL_KEY = "kampvoorbereiding:api-url:v1";
+  // Enkel de toegangscode wordt lokaal bewaard. De link komt altijd uit de
+  // broncode hierboven — bewust, want anders zou een begeleider met een oude
+  // opgeslagen link ongemerkt op een verouderde deployment blijven werken.
+  // Dat is precies wat er eerder is misgelopen.
   var ACCESS_KEY_KEY = "kampvoorbereiding:access-key:v1";
+  var OUD_API_URL_KEY = "kampvoorbereiding:api-url:v1";
   try {
-    var storedApiUrl = localStorage.getItem(API_URL_KEY);
-    if (storedApiUrl) CONFIG.API_URL = storedApiUrl;
     var storedAccessKey = localStorage.getItem(ACCESS_KEY_KEY);
     if (storedAccessKey) CONFIG.ACCESS_KEY = storedAccessKey;
+    // Restant uit de vorige werkwijze opruimen, zodat er geen verouderde
+    // link blijft rondslingeren in de browser.
+    localStorage.removeItem(OUD_API_URL_KEY);
   } catch (e) { /* geen localStorage: blijft bij de waarde hierboven */ }
 
-  function saveApiUrl(url) {
-    try { localStorage.setItem(API_URL_KEY, url); } catch (e) { /* negeren */ }
-  }
   function saveAccessKey(key) {
     try { localStorage.setItem(ACCESS_KEY_KEY, key); } catch (e) { /* negeren */ }
   }
@@ -85,9 +89,10 @@ var KV = (function () {
     back.innerHTML =
       '<div class="kv-modal" role="dialog" aria-modal="true">' +
         '<h3>Verbinding met de gedeelde Sheet</h3>' +
-        '<p>Deze twee gegevens krijg je van een medebegeleider. Ze worden enkel in deze browser bewaard, nooit in de broncode van de site.</p>' +
-        '<label for="kv-cfg-url">Web-app-link (eindigt op /exec)</label>' +
-        '<input id="kv-cfg-url" type="text" value="' + escapeHtml(CONFIG.API_URL) + '" placeholder="https://script.google.com/macros/s/.../exec">' +
+        '<p>Vul hier de toegangscode in die je van een medebegeleider krijgt. Ze wordt enkel in deze browser bewaard, nooit ergens verstuurd of gepubliceerd.</p>' +
+        '<label>Web-app-link</label>' +
+        '<input id="kv-cfg-url" type="text" value="' + escapeHtml(CONFIG.API_URL) + '" readonly title="Deze link staat vast in de site en hoeft niet ingevuld te worden.">' +
+        '<p class="kv-modal-hint">Deze link zit in de site zelf. Klopt hij niet meer, dan is er een nieuwe Apps Script-deployment en moet de site bijgewerkt worden — niet jouw browser.</p>' +
         '<label for="kv-cfg-key">Toegangscode</label>' +
         '<input id="kv-cfg-key" type="text" value="' + escapeHtml(CONFIG.ACCESS_KEY) + '" placeholder="toegangscode">' +
         '<div class="kv-test-result" id="kv-cfg-result" hidden></div>' +
@@ -109,10 +114,8 @@ var KV = (function () {
       );
     });
     document.getElementById("kv-cfg-save").addEventListener("click", function () {
-      var url = document.getElementById("kv-cfg-url").value.trim();
       var key = document.getElementById("kv-cfg-key").value.trim();
-      if (!url || !key) { alert("Vul zowel de link als de toegangscode in."); return; }
-      saveApiUrl(url);
+      if (!key) { alert("Vul de toegangscode in."); return; }
       saveAccessKey(key);
       location.reload();
     });
@@ -174,8 +177,17 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "1.7";
+  var VERSION = "1.9";
   var CHANGELOG = [
+    { version: "1.9", date: "2026-09-20", changes: [
+      "Bij \"Wie?\" op een taak verschijnen nu enkel de begeleiders van dát kamp, niet langer een vaste namenlijst",
+      "Wie niet meer meegaat, verdwijnt dus vanzelf uit de suggesties"
+    ]},
+    { version: "1.8", date: "2026-09-17", changes: [
+      "Je hoeft enkel nog de toegangscode in te vullen — de link naar de gedeelde Sheet zit nu in de site zelf",
+      "Bij een nieuwe deployment hoeft niemand meer iets aan te passen in zijn browser",
+      "Een oude, opgeslagen link in je browser wordt automatisch opgeruimd"
+    ]},
     { version: "1.7", date: "2026-09-14", changes: [
       "Knop \"Verbinding testen\": controleert of de link werkt, of de code klopt, en waarschuwt als een link ook zonder code gegevens vrijgeeft",
       "\"Verbinding wijzigen\" staat nu bovenaan het versiepaneel in plaats van onderaan"
@@ -252,7 +264,6 @@ var KV = (function () {
 
   var TYPE_LABELS = { "-18": "-18-kamp", "+18": "+18-kamp", "winter": "Winterkamp" };
   var EXPENSE_CATEGORIES = ["Boodschappen", "Restaurant", "Vervoer", "Verblijf", "Materiaal", "Andere"];
-  var BASE_BEGELEIDERS = ["Jochen", "Jordy", "Wout"];
   var SETUP_NEEDED = !CONFIG.API_URL || !CONFIG.ACCESS_KEY || CONFIG.API_URL.indexOf("PASTE_") === 0;
   var DRAFT_KEY = "kampvoorbereiding:new-camp-draft:v1";
 
@@ -335,17 +346,12 @@ var KV = (function () {
     return parseGuides(guidesStr).map(function (g) { return g.name; }).filter(Boolean);
   }
 
-  /** Basisnamen + alle namen die ooit als begeleider bij een kamp werden
-   *  ingevuld, gededupliceerd en gesorteerd — zo duiken eigen namen
-   *  automatisch op als suggestie bij het "Wie?"-veld van de takenlijst,
-   *  niet enkel de drie vaste namen. */
-  function begeleiderOptions(camps) {
-    var set = {};
-    BASE_BEGELEIDERS.forEach(function (n) { set[n] = true; });
-    (camps || []).forEach(function (c) {
-      guideNames(c.guides).forEach(function (n) { set[n] = true; });
-    });
-    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
+  /** De namen die als suggestie verschijnen bij het "Wie?"-veld van een taak:
+   *  enkel de begeleiders van dát kamp. Bewust geen vaste lijst en geen namen
+   *  uit andere kampen — anders blijven mensen die al jaren niet meer meegaan
+   *  eeuwig opduiken, en krijg je bij elk kamp suggesties van wie er niet bij is. */
+  function begeleiderOptions(camp) {
+    return guideNames(camp && camp.guides).sort(function (a, b) { return a.localeCompare(b); });
   }
 
   /** Toont een invoervak om de Web-app-URL eenmalig in te vullen (nodig op de
@@ -357,8 +363,8 @@ var KV = (function () {
     if (!slot) return;
     slot.innerHTML =
       '<div class="banner bad">' +
-        '<div style="margin-bottom:10px">Deze pagina is nog niet gekoppeld aan de gedeelde Google Sheet. Je hebt daarvoor de Web-app-link en de toegangscode nodig — vraag die na bij een medebegeleider. Dit hoeft maar één keer per toestel/browser.</div>' +
-        '<button type="button" class="btn primary" id="kv-setup-open">Verbinding instellen…</button>' +
+        '<div style="margin-bottom:10px">Deze pagina is nog niet gekoppeld aan de gedeelde Google Sheet. Je hebt daarvoor enkel de <strong>toegangscode</strong> nodig — vraag die na bij een medebegeleider. Dit hoeft maar één keer per toestel/browser.</div>' +
+        '<button type="button" class="btn primary" id="kv-setup-open">Toegangscode invullen…</button>' +
       '</div>';
     document.getElementById("kv-setup-open").addEventListener("click", openConnectionDialog);
   }
@@ -441,16 +447,6 @@ var KV = (function () {
       render: renderAll,
       state: function () { return connState; }
     };
-  }
-
-  /** Vult het gedeelde <datalist id="begeleiders-list"> in de pagina met de
-   *  actuele lijst van begeleidersnamen. Roep dit aan telkens `camps` ververst. */
-  function renderBegeleiderDatalist(camps) {
-    var dl = document.getElementById("begeleiders-list");
-    if (!dl) return;
-    dl.innerHTML = begeleiderOptions(camps).map(function (n) {
-      return '<option value="' + escapeHtml(n) + '">';
-    }).join("");
   }
 
   function typeLabel(camp) {
@@ -588,12 +584,21 @@ var KV = (function () {
       byPhase[s.phase].push(s);
     });
 
+    // Eén suggestielijst per kamp, gevuld met de begeleiders van dat kamp.
+    var campGuides = begeleiderOptions(camp);
+    var datalistId = campGuides.length ? "begeleiders-" + camp.id : "";
+    var datalistHtml = datalistId
+      ? '<datalist id="' + escapeHtml(datalistId) + '">' + campGuides.map(function (naam) {
+          return '<option value="' + escapeHtml(naam) + '">';
+        }).join("") + '</datalist>'
+      : '';
+
     var bodyHtml = phaseOrder.map(function (phase) {
       var list = byPhase[phase];
       var phaseDone = list.filter(function (s) { return s.done; }).length;
       return '<section class="phase">' +
         '<h4>' + escapeHtml(phase) + ' <span class="phase-count">' + phaseDone + '/' + list.length + '</span></h4>' +
-        '<ul class="steps">' + list.map(renderStepRow).join("") + '</ul>' +
+        '<ul class="steps">' + list.map(function (s) { return renderStepRow(s, datalistId); }).join("") + '</ul>' +
       '</section>';
     }).join("");
 
@@ -606,7 +611,7 @@ var KV = (function () {
         '<div class="progress-wrap"><div class="bar"><div class="fill" style="width:' + pct + '%"></div></div><span class="progress-label">' + doneCount + '/' + total + '</span></div>' +
         '<span class="chevron">' + (expanded ? "\u25be" : "\u25b8") + '</span>' +
       '</button>' +
-      (expanded ? '<div class="camp-body">' +
+      (expanded ? '<div class="camp-body">' + datalistHtml +
         (camp.notes ? '<div class="camp-notes"><h4>Notities</h4><p>' + escapeHtml(camp.notes).replace(/\n/g, "<br>") + '</p></div>' : '') +
         bodyHtml +
         '<div class="camp-actions">' +
@@ -622,14 +627,17 @@ var KV = (function () {
     '</article>';
   }
 
-  function renderStepRow(step) {
+  /** `datalistId` is leeg wanneer het kamp nog geen begeleiders heeft; dan
+   *  blijft het veld een gewoon tekstvak zonder suggesties. */
+  function renderStepRow(step, datalistId) {
     var extra = stepStatusClass(step);
     var cls = "step" + (step.done ? " is-done" : "") + (extra ? " " + extra : "");
     return '<li class="' + cls + '" data-step-id="' + step.id + '">' +
       '<input type="checkbox" data-step-done="' + step.id + '"' + (step.done ? " checked" : "") + '>' +
       '<span class="step-title">' + escapeHtml(step.title) + '</span>' +
       '<input type="date" class="step-date" data-step-date="' + step.id + '" value="' + escapeHtml(step.targetDate || "") + '">' +
-      '<input type="text" class="step-owner" list="begeleiders-list" placeholder="Wie?" data-step-owner="' + step.id + '" value="' + escapeHtml(step.owner || "") + '">' +
+      '<input type="text" class="step-owner"' + (datalistId ? ' list="' + datalistId + '"' : '') +
+        ' placeholder="Wie?" data-step-owner="' + step.id + '" value="' + escapeHtml(step.owner || "") + '">' +
     '</li>';
   }
 
@@ -722,14 +730,14 @@ var KV = (function () {
 
   return {
     CONFIG: CONFIG, SETUP_NEEDED: SETUP_NEEDED, DEFAULT_CHECKLIST: DEFAULT_CHECKLIST, TYPE_LABELS: TYPE_LABELS,
-    EXPENSE_CATEGORIES: EXPENSE_CATEGORIES, BASE_BEGELEIDERS: BASE_BEGELEIDERS,
+    EXPENSE_CATEGORIES: EXPENSE_CATEGORIES,
     escapeHtml: escapeHtml, cssEscape: cssEscape, todayStr: todayStr, daysUntil: daysUntil,
     normalizeDateStr: normalizeDateStr, formatDateNL: formatDateNL, boolish: boolish, formatEUR: formatEUR, stepStatusClass: stepStatusClass,
     openConnectionDialog: openConnectionDialog,
     typeLabel: typeLabel, stepsForCamp: stepsForCamp, buildDefaultSteps: buildDefaultSteps,
-    begeleiderOptions: begeleiderOptions, renderBegeleiderDatalist: renderBegeleiderDatalist,
+    begeleiderOptions: begeleiderOptions,
     parseGuides: parseGuides, formatGuides: formatGuides, guideNames: guideNames,
-    saveApiUrl: saveApiUrl, renderSetupBanner: renderSetupBanner,
+    renderSetupBanner: renderSetupBanner,
     renderConnStatus: renderConnStatus, createPageRuntime: createPageRuntime,
     VERSION: VERSION, CHANGELOG: CHANGELOG, renderVersionBadge: renderVersionBadge,
     apiGet: apiGet, apiPost: apiPost, fetchAll: fetchAll,

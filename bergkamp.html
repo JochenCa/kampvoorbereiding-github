@@ -1,0 +1,425 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bergkamp — Bleau Climbing Team</title>
+<meta name="description" content="Twaalf jaar bergkampen: bestemmingen, berghutten en hoe een kampweek eruitziet.">
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+
+<style>
+:root{
+  --bg:#EEF1F0; --surface:#FFFFFF; --surface-2:#E4E9E7; --ink:#1E2624; --ink-soft:#5C6A67;
+  --accent:#3E6B6B; --accent-ink:#FFFFFF; --accent-soft:#DCE7E6;
+  --warm:#A8752E; --warm-soft:#F3E6D2; --line:#D3DBD9; --line-strong:#B6C2BF;
+  --font-display:"Fraunces",Georgia,serif; --font-body:"IBM Plex Sans","Segoe UI",Arial,sans-serif;
+  --font-mono:"IBM Plex Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#151B1A; --surface:#1D2523; --surface-2:#24302D; --ink:#E9EEEC; --ink-soft:#9FB0AC;
+  --accent:#6FA3A0; --accent-ink:#0E1514; --accent-soft:#253634;
+  --warm:#D3A25F; --warm-soft:#332A1B; --line:#2E3835; --line-strong:#3C4A46; }}
+*{box-sizing:border-box}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important} }
+html,body{background:var(--bg);margin:0}
+body{color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.55}
+h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;margin:0;text-wrap:balance}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+
+/* ---------- hero ---------- */
+.hero{padding:72px 0 44px;border-bottom:1px solid var(--line-strong)}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+.hero h1{font-size:clamp(36px,6vw,58px);line-height:1.05;letter-spacing:-.015em}
+.hero .lead{font-size:clamp(17px,2.2vw,20px);color:var(--ink-soft);max-width:62ch;margin-top:18px}
+.cijfers{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:40px}
+.cijfer{background:var(--surface);padding:20px 18px}
+.cijfer .n{font-family:var(--font-display);font-size:34px;line-height:1;color:var(--accent);display:block}
+.cijfer .l{font-size:12.5px;color:var(--ink-soft);margin-top:7px;display:block}
+
+section{padding:64px 0}
+section + section{border-top:1px solid var(--line)}
+.sectiekop{margin-bottom:28px}
+.sectiekop h2{font-size:clamp(24px,3.4vw,32px)}
+.sectiekop p{color:var(--ink-soft);max-width:64ch;margin:10px 0 0}
+
+/* ---------- kaart ---------- */
+.kaart-grid{display:grid;grid-template-columns:1.45fr 1fr;gap:20px;align-items:start}
+#kaart{height:480px;border-radius:10px;border:1px solid var(--line-strong);z-index:0}
+.leaflet-container{background:var(--surface-2);font-family:var(--font-body)}
+.marker-pin{width:15px;height:15px;border-radius:50%;background:var(--accent);border:2.5px solid var(--surface);
+  box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer;transition:transform .15s ease}
+.marker-pin.winter{background:var(--warm)}
+.marker-pin:hover{transform:scale(1.4)}
+.marker-pin.actief{transform:scale(1.55);box-shadow:0 0 0 5px var(--accent-soft),0 1px 4px rgba(0,0,0,.35)}
+.marker-pin.actief.winter{box-shadow:0 0 0 5px var(--warm-soft),0 1px 4px rgba(0,0,0,.35)}
+.leaflet-tooltip{background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:6px;
+  font-family:var(--font-body);font-size:12.5px;padding:4px 9px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.leaflet-tooltip-top::before{border-top-color:var(--line-strong)}
+.kaart-kolom{position:relative}
+.kaart-hint{position:absolute;inset:0;z-index:400;border-radius:10px;background:rgba(30,38,36,.42);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;width:100%;font:inherit}
+.kaart-hint[hidden]{display:none}
+.kaart-hint span{background:var(--surface);color:var(--ink);border-radius:999px;padding:9px 18px;font-size:14px;
+  box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.legende{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
+.legende span{display:flex;align-items:center;gap:7px}
+.legende i{width:11px;height:11px;border-radius:50%;background:var(--accent);display:inline-block}
+.legende i.winter{background:var(--warm)}
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px;min-height:480px}
+.detail .leeg{color:var(--ink-soft);font-size:14.5px}
+.detail h3{font-size:21px}
+.detail .plaats{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin-bottom:6px}
+.detail .meta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 18px}
+.tag{font-family:var(--font-mono);font-size:11px;padding:3px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.tag.winter{background:var(--warm-soft);color:var(--warm)}
+.detail p{font-size:14.5px;color:var(--ink-soft);margin:0 0 14px}
+.etappes{list-style:none;padding:0;margin:0}
+.etappes li{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:9px 0;border-top:1px dashed var(--line);font-size:14px}
+.etappes li:first-child{border-top:0}
+.etappes .d{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);padding-top:3px}
+.etappes .hut{font-weight:500}
+.etappes .cijfers-klein{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);display:block;margin-top:2px}
+.detail .opmerking{font-size:13px;font-style:italic;color:var(--ink-soft);border-top:1px solid var(--line);
+  margin:14px 0 0;padding-top:12px}
+
+/* ---------- tijdlijn edities ---------- */
+.tijdlijn{position:relative;padding-left:22px}
+.tijdlijn::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--line-strong)}
+.editie{position:relative;padding:0 0 22px 0}
+.editie::before{content:"";position:absolute;left:-21px;top:7px;width:12px;height:12px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--bg)}
+.editie.winter::before{background:var(--warm)}
+.editie.onbekend::before{background:var(--line-strong)}
+.editie .jaar{font-family:var(--font-mono);font-size:12px;color:var(--accent);letter-spacing:.06em}
+.editie h4{font-size:17px;margin:2px 0 4px}
+.editie .regel{font-size:14px;color:var(--ink-soft)}
+.editie button{background:none;border:0;padding:0;margin-top:6px;color:var(--accent);font:inherit;font-size:13.5px;
+  cursor:pointer;text-decoration:underline}
+
+/* ---------- kampweek ---------- */
+.week{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px}
+.dag{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column}
+.dag.tocht{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.dag .naam{font-family:var(--font-mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:8px}
+.dag h4{font-size:16px;margin-bottom:8px}
+.dag ul{margin:0;padding-left:16px;font-size:13.5px;color:var(--ink-soft)}
+.dag li{margin-bottom:5px}
+.dag .uur{font-family:var(--font-mono);color:var(--ink)}
+.nb{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--warm);border-radius:8px;
+  padding:16px 18px;margin-top:22px;font-size:14.5px;color:var(--ink-soft)}
+.nb strong{color:var(--ink)}
+
+footer{border-top:1px solid var(--line-strong);padding:32px 0 56px;font-size:13px;color:var(--ink-soft)}
+footer .mono{font-family:var(--font-mono)}
+
+@media (max-width:860px){
+  .kaart-grid{grid-template-columns:1fr}
+  #kaart{height:340px}
+  .detail{min-height:0}
+  .hero{padding:48px 0 32px}
+  section{padding:44px 0}
+}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Bleau Climbing Team · Gent</div>
+    <h1>Bergkamp</h1>
+    <p class="lead">Sinds 2014 trekken we elke zomer met jongeren de bergen in. Een week lang, van basiskamp naar berghut, in zes landen en dertien zomers. Deze pagina toont waar we geweest zijn, en hoe zo'n week eruitziet.</p>
+    <div class="cijfers">
+      <div class="cijfer"><span class="n">13</span><span class="l">zomers, 2014 tot 2026</span></div>
+      <div class="cijfer"><span class="n">6</span><span class="l">landen</span></div>
+      <div class="cijfer"><span class="n">20+</span><span class="l">berghutten gedocumenteerd</span></div>
+      <div class="cijfer"><span class="n">7–30</span><span class="l">deelnemers per editie</span></div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sectiekop">
+      <h2>Waar we geweest zijn</h2>
+      <p>Van de Spaanse Pyreneeën tot de Julische Alpen. Klik een bestemming aan voor de route van dat jaar — welke hutten, hoeveel uur stappen, hoeveel hoogtemeters.</p>
+    </div>
+    <div class="kaart-grid">
+      <div class="kaart-kolom">
+        <div id="kaart"></div>
+        <button type="button" class="kaart-hint" id="kaarthint" hidden><span>Tik om de kaart te verkennen</span></button>
+        <div class="legende">
+          <span><i></i> zomerkamp</span>
+          <span><i class="winter"></i> winterkamp</span>
+          <span>2014–2016: regio niet bewaard gebleven</span>
+        </div>
+      </div>
+      <aside class="detail" id="detail">
+        <p class="leeg">Kies een bestemming op de kaart of in de tijdlijn hieronder.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section>
+    <div class="sectiekop">
+      <h2>Twaalf jaar, editie per editie</h2>
+      <p>Wat begon met zeven deelnemers en twee begeleiders, groeide uit tot groepen van dertig — en sinds 2023 tot meerdere kampen per jaar, voor jongeren, voor achttienplussers en voor volwassenen.</p>
+    </div>
+    <div class="tijdlijn" id="tijdlijn"></div>
+  </section>
+
+  <section>
+    <div class="sectiekop">
+      <h2>Hoe een kampweek verloopt</h2>
+      <p>De opbouw is over alle edities heen vrijwel dezelfde gebleven. Zaterdag vertrekken, zondag inlopen en materiaal controleren, dan drie dagen van hut naar hut, een rustdag, en vrijdag terug.</p>
+    </div>
+    <div class="week" id="week"></div>
+    <div class="nb">
+      <strong>Waarom die vaste opbouw?</strong> De zondag is geen opvuldag: dat is de dag waarop de rugzakken gemaakt en gecontroleerd worden, waarop iedereen leert stappen met gewicht, en waarop duidelijk wordt wie het tempo aankan. Wie pas op maandag in de bergen staat, ontdekt problemen te laat. Bij de achttienplussers duurt de tocht vijf dagen in plaats van drie.
+    </div>
+  </section>
+
+  <footer class="wrap">
+    <p>Begeleiders bergkampen doorheen de jaren, i.s.m. Klimzaal Bleau, Gent.</p>
+    <p class="mono">Routes en hutten komen uit de routedatabank van het bergkamp · kaartgegevens © OpenStreetMap-bijdragers</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // Coördinaten staan op het dorp of basiskamp uit de routedatabank, niet op de
+  // hut zelf. Van de edities 2014-2016 is de regio niet bewaard gebleven; die
+  // staan wel in de tijdlijn, maar krijgen geen speld op de kaart.
+  var EDITIES = [
+    { jaar:2026, label:"2026", naam:"Vallée de la Clarée", plaats:"Névache, Hautes-Alpes", land:"Frankrijk",
+      pos:[45.016,6.603], niveau:"-18 en +18", deelnemers:"max 14",
+      tekst:"Twee kampen naar dezelfde streek: in juli een vijfdaagse voor achttienplussers, in augustus een driedaagse voor jongeren. De tocht steekt de grens over naar Italië en weer terug. Op de kalender van 2026 stonden vijf kampen — ook de Vogezen in de krokusvakantie, de Vercors met Pasen en de Aostavallei in de late zomer.",
+      etappes:[
+        {d:"1", hut:"Rifugio I Re Magi", c:"9,3 km · 700 hm · 4,5 u"},
+        {d:"2", hut:"Refuge Terre Rouge", c:"15 km · 1300 hm · 8 u"},
+        {d:"3", hut:"Refuge Clot des Vaches", c:"21 km · 1100 hm · 10 u — drie cols, hoogste punt 2614 m"},
+        {d:"4", hut:"Refuge Chardonnet", c:"16 km · 1000 hm · 8 u"},
+        {d:"5", hut:"Afdaling naar Rubion", c:"13 km · 1200 m dalen · 5 u"}
+      ]},
+    { jaar:2025, label:"2025", naam:"Lechtal", plaats:"Lech, Vorarlberg", land:"Oostenrijk",
+      pos:[47.208,10.143], niveau:"-18 en +18", deelnemers:"max 14",
+      tekst:"Vijf dagen van hut naar hut in het Arlberg-gebied, met vier bemande berghutten op rij.",
+      etappes:[
+        {d:"1", hut:"Freiburger Hütte"},
+        {d:"2", hut:"Ravensburger Hütte"},
+        {d:"3", hut:"Stuttgarter Hütte"},
+        {d:"4", hut:"Leutkircher Hütte"},
+        {d:"5", hut:"Afdaling naar St. Jakob"}
+      ],
+      opmerking:"De afstanden en staptijden in de presentatie van dat jaar bleken woordelijk overgenomen uit een eerdere editie in een ander gebergte. Ze staan hier daarom niet bij."},
+    { jaar:2025, label:"2025", naam:"Jura — winterkamp", plaats:"Jura, grens met Zwitserland", land:"Frankrijk",
+      pos:[46.153,5.947], niveau:"winterkamp", deelnemers:"max 6", winter:true,
+      tekst:"Vijf stapdagen in de paasvakantie, met tenten bij onbemande hutten en nachttemperaturen onder nul. Een kamp voor wie al ervaring heeft.",
+      etappes:[{d:"—", hut:"Onbemande hutten, in eigen tent", c:"5 stapdagen · laatste nacht in een hotel"}]},
+    { jaar:2024, label:"2024", naam:"Chamonix-Mont Blanc", plaats:"Le Cugnon, Haute-Savoie", land:"Frankrijk",
+      pos:[45.923,6.869], niveau:"-18 en +18", deelnemers:"—",
+      tekst:"Een vijfdaagse die met de trein naar Vallorcine begon en over Zwitsers grondgebied liep — de enige editie waarbij het openbaar vervoer deel van de route was. Dat jaar lag er boven 2000 meter nog sneeuw, en boven 3000 meter tot een meter diep: vroeger vertrekken, langere staptijden, gamaschen mee.",
+      etappes:[
+        {d:"1", hut:"Berghut aan Zwitserse kant", c:"aankomst 18u, na een treinrit van een uur"},
+        {d:"2", hut:"Refuge Pierre à Bérard", c:"aankomst 16u"},
+        {d:"3", hut:"Refuge Moëde Anterne", c:"aankomst 16u"},
+        {d:"4", hut:"Refuge des Sales", c:"aankomst 16u"},
+        {d:"5", hut:"Afdaling naar Servoz", c:"aankomst 15u"}
+      ],
+      opmerking:"In augustus ging er een driedaagse voor jongeren naar dezelfde streek; welke hutten die gebruikte, is niet bewaard gebleven."},
+    { jaar:2024, label:"2024", naam:"Bohinj — huttentocht", plaats:"Meer van Bohinj", land:"Slovenië",
+      pos:[46.277,13.881], niveau:"geen bergkamp", deelnemers:"max 7",
+      tekst:"Geen bergkamp, maar een huttentocht voor volwassenen die via de klimzaal georganiseerd werd, met eigen tochtbegeleiders. Ze staat hier omdat de route en de ervaringen in dezelfde databank bewaard zijn: 600 tot 1000 hoogtemeter per dag, en water enkel in het begin van de tocht.",
+      etappes:[{d:"—", hut:"Vier berghutten", c:"5 stapdagen · +600 tot +1000 hm per dag"}]},
+    { jaar:2023, label:"2023", naam:"Vignemale", plaats:"Cauterets en Arcizans-Avant", land:"Frankrijk",
+      pos:[42.888,-0.113], niveau:"-18 en +18", deelnemers:"—",
+      tekst:"Twee kampen in de Pyreneeën. Met dertien uur rijden de verste bestemming uit het archief — en het enige kamp waarvan een volledig kostenplaatje bewaard is.",
+      etappes:[
+        {d:"1", hut:"Refuge d'Estom", c:"late start om 12u, aankomst 18u"},
+        {d:"2", hut:"Refuge des Oulettes de Gaube", c:"aankomst 16u"},
+        {d:"3", hut:"Refuge Wallon", c:"aankomst 16u"},
+        {d:"4", hut:"Refuge d'Ilhéou", c:"aankomst 16u"},
+        {d:"5", hut:"Terug naar Cauterets", c:"aankomst 15u, via Pont d'Espagne"}
+      ]},
+    { jaar:2022, label:"2022", naam:"Zugspitze", plaats:"Ehrwald, aan de voet van de Zugspitze", land:"Duitsland / Oostenrijk",
+      pos:[47.401,10.916], niveau:"-18", deelnemers:"—",
+      tekst:"Door het Höllental omhoog en via het Reintal weer naar beneden, in het massief van de hoogste berg van Duitsland.",
+      etappes:[
+        {d:"1", hut:"Höllentalangerhütte", c:"4 u · 400 hm — vertrek aan de Eibsee"},
+        {d:"2", hut:"Reintalangerhütte", c:"7 u · 600 hm"},
+        {d:"3", hut:"Afdaling naar het dal", c:"5 u · 1200 m dalen"}
+      ]},
+    { jaar:2021, label:"2021", naam:"Chaîne des Aravis", plaats:"Saint-Jean-de-Sixt, Haute-Savoie", land:"Frankrijk",
+      pos:[45.897,6.421], niveau:"-18", deelnemers:"—",
+      tekst:"De zwaarste openingsdag uit het archief: achttienhonderd hoogtemeter stijgen op dag één.",
+      etappes:[
+        {d:"1", hut:"Refuge de la Pointe Percée", c:"7 u · 1800 hm stijgen"},
+        {d:"2", hut:"Refuge de Lessy", c:"5 u · 800 hm · 1200 m dalen"},
+        {d:"3", hut:"Terug via Le Grand-Bornand", c:"7 u · 900 hm · 1650 m dalen"}
+      ]},
+    { jaar:2020, label:"2020", naam:"Noordelijke Vogezen", plaats:"Plan Incliné, bij Straatsburg", land:"Frankrijk",
+      pos:[48.722,7.152], niveau:"-18", deelnemers:"—",
+      tekst:"Een coronajaar: geen hutten, maar dagtochten vanaf één basiskamp, langs ruïnes, kastelen en Romeinse opgravingen. Met zes uur rijden de dichtstbijzijnde bestemming.",
+      etappes:[{d:"—", hut:"Dagtochten vanaf de camping", c:"± 7 u per dag, inclusief bezoeken"}]},
+    { jaar:2019, label:"2019", naam:"Julische Alpen", plaats:"Bled, Triglav National Park", land:"Slovenië",
+      pos:[46.362,14.134], niveau:"-18", deelnemers:"23 deelnemers, 4 begeleiders",
+      tekst:"Een driedaagse in het Triglav National Park, met een aparte oriëntatiedag waarop de deelnemers zelf navigeerden met kaart en kompas.",
+      etappes:[{d:"—", hut:"Berghutten in de Julische Alpen", c:"3 stapdagen · citytrip naar Ljubljana op donderdag"}]},
+    { jaar:2018, label:"2018", naam:"Brenta-Dolomieten", plaats:"Molveno, Trentino", land:"Italië",
+      pos:[46.143,10.963], niveau:"-18", deelnemers:"30 deelnemers, 6 begeleiders",
+      tekst:"De grootste editie ooit: dertig deelnemers, zes begeleiders, vier busjes. Een lus vanuit Molveno met een korte tweede dag, zodat er 's namiddags nog een tocht zonder bagage bij kon.",
+      etappes:[
+        {d:"1", hut:"Rifugio Silvio Agostini (2410 m)", c:"vertrek 9u30 · aankomst 18u"},
+        {d:"2", hut:"Rifugio Tosa Pedrotti (2440 m)", c:"aankomst al om 14u · daarna lustocht"},
+        {d:"3", hut:"Afdaling naar Molveno", c:"9u tot 16u"}
+      ]},
+    { jaar:2017, label:"2017", naam:"Ordesa y Monte Perdido", plaats:"Spaanse Pyreneeën", land:"Spanje",
+      pos:[42.650,0.040], niveau:"-18", deelnemers:"23 deelnemers, 5 begeleiders",
+      tekst:"Een driedaagse door het hooggebergte van het nationaal park Ordesa y Monte Perdido.",
+      etappes:[{d:"—", hut:"Berghutten in het nationaal park", c:"3 stapdagen"}]}
+  ];
+
+  var ZONDER_KAART = [
+    { jaar:2016, naam:"Frankrijk", regel:"21 deelnemers, 5 begeleiders — regio niet bewaard gebleven" },
+    { jaar:2015, naam:"Slovenië", regel:"22 deelnemers, 5 begeleiders — regio niet bewaard gebleven" },
+    { jaar:2014, naam:"Oostenrijk", regel:"7 deelnemers, 2 begeleiders — de allereerste editie" }
+  ];
+
+  var WEEK = [
+    { dag:"Zaterdag", titel:"Heenreis en basiskamp", items:[
+      ["5u45","verzamelen aan de klimzaal in Gent"],
+      ["6u","vertrek met de busjes"],
+      ["—","zes tot dertien uur rijden, afhankelijk van de bestemming"],
+      ["18u","tenten opzetten en de omgeving verkennen"],
+      ["20u","eerste avondmaal samen"]]},
+    { dag:"Zondag", titel:"Inlopen en klaarmaken", items:[
+      ["9u","ontbijt"],
+      ["11u30","inlooptocht van enkele uren"],
+      ["—","rugzakkunde: hoe pak je in voor drie dagen"],
+      ["—","materiaalcontrole en verdeling van eten"],
+      ["20u","briefing voor de tocht"]]},
+    { dag:"Maandag", titel:"Eerste dag op tocht", tocht:true, items:[
+      ["7u30","ontbijt en lunchpakket maken"],
+      ["—","rit naar het vertrekpunt"],
+      ["9u","start van de tocht"],
+      ["16u","aankomst in de berghut"],
+      ["19u","avondmaal in de hut"],
+      ["22u","stilte"]]},
+    { dag:"Dinsdag", titel:"Tweede dag op tocht", tocht:true, items:[
+      ["7u","opstaan"],
+      ["8u30","vertrek"],
+      ["—","de zwaarste dag: het meeste stijgen"],
+      ["17u","aankomst in de volgende hut"]]},
+    { dag:"Woensdag", titel:"Terug naar het dal", tocht:true, items:[
+      ["8u30","vertrek"],
+      ["—","afdaling naar het vertrekpunt"],
+      ["15u","terug op het basiskamp"],
+      ["—","douchen, en pizza in plaats van zelf koken"]]},
+    { dag:"Donderdag", titel:"Rustdag", items:[
+      ["—","uitslapen en brunch"],
+      ["—","culturele uitstap: Straatsburg, Chamonix, Lourdes, Ljubljana of Briançon"],
+      ["—","afsluiten van het kamp"]]},
+    { dag:"Vrijdag", titel:"Terugreis", items:[
+      ["6u","opstaan, tenten opbreken"],
+      ["7u","vertrek"],
+      ["18–20u","aankomst in Gent"]]}
+  ];
+
+  /* ---------------- kaart ---------------- */
+  var kaart = L.map("kaart", { scrollWheelZoom:false }).setView([45.9, 7.5], 5);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 14, attribution: '&copy; OpenStreetMap'
+  }).addTo(kaart);
+
+  var groep = L.featureGroup().addTo(kaart);
+  var markers = EDITIES.map(function (e, i) {
+    var icoon = L.divIcon({
+      className: "",
+      html: '<div class="marker-pin' + (e.winter ? " winter" : "") + '"></div>',
+      iconSize: [15, 15], iconAnchor: [7, 7]
+    });
+    var m = L.marker(e.pos, { icon: icoon, title: e.jaar + " — " + e.naam })
+      .bindTooltip(e.jaar + " · " + e.naam, { direction: "top", offset: [0, -9] })
+      .addTo(groep);
+    m.on("click", function () { toon(i); });
+    return m;
+  });
+  kaart.fitBounds(groep.getBounds().pad(0.18));
+
+  // Op een aanraakscherm vangt de kaart anders elke veeg op, zodat je er niet
+  // voorbij kan scrollen. Pas na een tik wordt ze bedienbaar.
+  if (window.matchMedia("(hover: none)").matches) {
+    kaart.dragging.disable();
+    var hint = document.getElementById("kaarthint");
+    hint.hidden = false;
+    hint.addEventListener("click", function () { kaart.dragging.enable(); hint.hidden = true; });
+  }
+
+  function markeerActief(i) {
+    markers.forEach(function (m, j) {
+      var el = m.getElement() && m.getElement().querySelector(".marker-pin");
+      if (el) el.classList.toggle("actief", i === j);
+    });
+  }
+
+  /* ---------------- detail ---------------- */
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c];
+    });
+  }
+
+  function toon(i) {
+    var e = EDITIES[i];
+    document.getElementById("detail").innerHTML =
+      '<div class="plaats">' + esc(e.land) + '</div>' +
+      "<h3>" + esc(e.naam) + "</h3>" +
+      '<div class="meta"><span class="tag' + (e.winter ? " winter" : "") + '">' + esc(e.jaar) + "</span>" +
+        '<span class="tag">' + esc(e.niveau) + "</span>" +
+        (e.deelnemers && e.deelnemers !== "—" ? '<span class="tag">' + esc(e.deelnemers) + "</span>" : "") +
+      "</div>" +
+      "<p>" + esc(e.tekst) + "</p>" +
+      '<ul class="etappes">' + e.etappes.map(function (t) {
+        return "<li><span class='d'>" + esc(t.d) + "</span><span><span class='hut'>" + esc(t.hut) +
+               "</span>" + (t.c ? "<span class='cijfers-klein'>" + esc(t.c) + "</span>" : "") + "</span></li>";
+      }).join("") + "</ul>" +
+      (e.opmerking ? '<p class="opmerking">' + esc(e.opmerking) + "</p>" : "");
+    markeerActief(i);
+    document.getElementById("detail").scrollIntoView({ behavior:"smooth", block:"nearest" });
+  }
+
+  /* ---------------- tijdlijn ---------------- */
+  var tl = document.getElementById("tijdlijn");
+  var rijen = EDITIES.map(function (e, i) {
+    return '<div class="editie' + (e.winter ? " winter" : "") + '">' +
+      '<div class="jaar">' + esc(e.jaar) + "</div>" +
+      "<h4>" + esc(e.naam) + " — " + esc(e.land) + "</h4>" +
+      '<div class="regel">' + esc(e.plaats) + " · " + esc(e.niveau) +
+        (e.deelnemers && e.deelnemers !== "—" ? " · " + esc(e.deelnemers) : "") + "</div>" +
+      '<button type="button" data-i="' + i + '">Route bekijken</button>' +
+    "</div>";
+  }).concat(ZONDER_KAART.map(function (e) {
+    return '<div class="editie onbekend"><div class="jaar">' + esc(e.jaar) + "</div>" +
+      "<h4>" + esc(e.naam) + "</h4><div class='regel'>" + esc(e.regel) + "</div></div>";
+  }));
+  tl.innerHTML = rijen.join("");
+  tl.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-i]");
+    if (!b) return;
+    var i = Number(b.getAttribute("data-i"));
+    toon(i);
+    kaart.setView(EDITIES[i].pos, 8, { animate:true });
+    document.getElementById("kaart").scrollIntoView({ behavior:"smooth", block:"center" });
+  });
+
+  /* ---------------- kampweek ---------------- */
+  document.getElementById("week").innerHTML = WEEK.map(function (d) {
+    return '<article class="dag' + (d.tocht ? " tocht" : "") + '">' +
+      '<div class="naam">' + esc(d.dag) + "</div><h4>" + esc(d.titel) + "</h4><ul>" +
+      d.items.map(function (r) {
+        return "<li>" + (r[0] !== "—" ? '<span class="uur">' + esc(r[0]) + "</span> " : "") + esc(r[1]) + "</li>";
+      }).join("") + "</ul></article>";
+  }).join("");
+})();
+</script>
