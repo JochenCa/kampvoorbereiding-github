@@ -113,6 +113,8 @@ h1{ font-size: 32px; letter-spacing:-.01em; }
 .phase h4 .phase-count{ color: var(--line-strong); font-weight: 400; }
 .steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
 .step{ display:grid; grid-template-columns: 20px 1fr 132px 150px; align-items:center; gap: 10px; padding: 7px 8px; border-radius: 5px; border-left: 3px solid transparent; }
+/* Met verwijderknop schuift er een vijfde kolom bij. */
+.step:has(.step-del){ grid-template-columns: 20px 1fr 132px 150px 26px; }
 .step:hover{ background: var(--surface-2); }
 .step.is-done .step-title{ color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--line-strong); }
 .step.is-warn{ border-left-color: var(--warn); }
@@ -251,4 +253,23 @@ footer.foot{ margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--li
   .overzicht-table th:first-child, .overzicht-table td:first-child{ position: sticky; left: 0; background: var(--surface); }
   .overzicht-table th:first-child{ background: var(--surface-2); }
   .overzicht-table tfoot td:first-child{ background: var(--surface-2); }
+}
+
+
+/* ---- stap toevoegen / verwijderen ---- */
+/* Het kruisje blijft onzichtbaar tot je de rij aanwijst: verwijderen mag geen
+   knop zijn waar je per ongeluk op klikt terwijl je een datum aanpast. */
+.step-del{ width: 22px; height: 22px; line-height: 1; padding: 0; border: 0; border-radius: 5px;
+  background: transparent; color: var(--ink-soft); font-size: 17px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.step:hover .step-del, .step-del:focus-visible{ opacity: 1; }
+.step-del:hover{ background: var(--bad); color: #fff; }
+.add-step{ margin-top: 4px; padding: 5px 9px; border: 1px dashed var(--line-strong); border-radius: 5px;
+  background: transparent; color: var(--ink-soft); font-family: var(--font-body); font-size: 12.5px; cursor: pointer; }
+.add-step:hover{ border-color: var(--accent); color: var(--accent); border-style: solid; }
+
+@media (max-width: 640px){
+  /* Op een aanraakscherm is er geen hover, dus het kruisje staat er altijd,
+     en groot genoeg om met een vinger te raken. */
+  .step-del{ opacity: 1; width: 30px; height: 30px; font-size: 20px; }
+  .add-step{ padding: 9px 12px; font-size: 14px; width: 100%; }
 }

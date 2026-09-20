@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Kampvoorbereiding</title>
 <link rel="stylesheet" href="shared.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -58,10 +59,14 @@
   var formDraft = Object.assign({}, EMPTY_DRAFT);
   var draftRestored = false;
   var creatingCamp = false;
+  // Staat gevuld terwijl het formulier een duplicaat voorbereidt: de stappen
+  // van dat kamp worden meegekopieerd in plaats van de standaardchecklist.
+  var duplicateFromId = null;
 
   var runtime = KV.createPageRuntime({
     onData: function (data) {
       camps = data.camps; steps = data.steps;
+      handleDuplicateParam();
     },
     render: function () { renderForm(); renderCamps(); renderDeadlines(); }
   });
@@ -243,6 +248,7 @@
 
   function closeForm() {
     formOpen = false; draftRestored = false; formCampId = null; formMode = "new";
+    duplicateFromId = null;
     formDraft = Object.assign({}, EMPTY_DRAFT);
     KV.clearDraft();
     render();
@@ -279,7 +285,7 @@
       slot.innerHTML = "";
     } else {
       slot.innerHTML = '<div class="camps-section">' + active.map(function (c) {
-        return KV.renderCampCard(c, KV.stepsForCamp(steps, c.id), expandedIds.has(c.id));
+        return KV.renderCampCard(c, KV.stepsForCamp(steps, c.id), expandedIds.has(c.id), { stepsEditable: true, duplicable: true });
       }).join("") + '</div>';
     }
 
@@ -294,6 +300,9 @@
         },
         onDelete: requestDelete,
         onEdit: openEditForm,
+        onDuplicate: openDuplicateForm,
+        onAddStep: addStep,
+        onDeleteStep: deleteStep,
         onSaved: refresh,
         onError: showApiError
       });
@@ -315,6 +324,66 @@
     render();
     var formEl = document.querySelector(".new-camp-form");
     if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /** Dupliceren opent het formulier vóóraf ingevuld in plaats van meteen een
+   *  kamp aan te maken: naam en datums moet je toch aanpassen, en zo blijft er
+   *  niets half afgewerkts staan als je je bedenkt. */
+  function openDuplicateForm(camp) {
+    formMode = "new";
+    formCampId = null;
+    duplicateFromId = camp.id;
+    draftRestored = false;
+    formDraft = Object.assign({}, EMPTY_DRAFT, {
+      name: (camp.name || "") + " (kopie)",
+      type: camp.type || "-18", customLabel: camp.customLabel || "",
+      destination: camp.destination || "", transport: camp.transport || "",
+      guides: camp.guides || "", camping: camp.camping || ""
+      // datums, notities en de klimzaal-datums bewust leeg: die horen bij dat ene jaar
+    });
+    formOpen = true;
+    render();
+    var formEl = document.querySelector(".new-camp-form");
+    if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /** Opent het duplicaat-formulier wanneer je vanuit het archief komt
+   *  (kampvoorbereiding.html?dupliceer=<id>). Kan pas als de kampen geladen
+   *  zijn, en gebeurt daarom één keer, na de eerste geslaagde ophaling. */
+  var duplicateParamDone = false;
+  function handleDuplicateParam() {
+    if (duplicateParamDone) return;
+    var id = new URLSearchParams(location.search).get("dupliceer");
+    if (!id) { duplicateParamDone = true; return; }
+    var camp = camps.find(function (c) { return c.id === id; });
+    if (!camp) return; // gegevens nog niet binnen: volgende ronde opnieuw proberen
+    duplicateParamDone = true;
+    history.replaceState(null, "", location.pathname);
+    openDuplicateForm(camp);
+  }
+
+  function addStep(campId, phase) {
+    if (KV.SETUP_NEEDED) return;
+    var title = window.prompt("Welke stap wil je toevoegen aan \"" + phase + "\"?");
+    if (title === null) return;
+    title = title.trim();
+    if (!title) return;
+    KV.addStepToCamp(campId, phase, title, KV.stepsForCamp(steps, campId))
+      .then(refresh)
+      .catch(showApiError);
+  }
+
+  function deleteStep(stepId, title) {
+    if (KV.SETUP_NEEDED) return;
+    if (!window.confirm("Stap \"" + title + "\" verwijderen? Dit kan niet ongedaan gemaakt worden.")) return;
+    KV.apiPost("deleteStep", { id: stepId }).then(refresh).catch(function (err) {
+      var msg = err && err.message ? err.message : "onbekende fout";
+      if (/onbekende actie|unknown action/i.test(msg)) {
+        alert("Verwijderen werkt nog niet: de Apps Script-code op de server is nog niet bijgewerkt naar de versie met \"deleteStep\". Zie README.");
+        return;
+      }
+      showApiError(err);
+    });
   }
 
   function submitEditCamp() {
@@ -380,11 +449,27 @@
       requestDate: formDraft.requestDate || "", approvalDate: formDraft.approvalDate || ""
     };
 
+    // Bij een duplicaat nemen we de stappenlijst van het bronkamp over — zonder
+    // vinkjes en zonder datums, want die horen bij de vorige editie.
+    var nieuweStappen = KV.buildDefaultSteps();
+    if (duplicateFromId) {
+      var bron = KV.stepsForCamp(steps, duplicateFromId);
+      if (bron.length) {
+        nieuweStappen = bron
+          .slice()
+          .sort(function (a, b) { return (Number(a.order) || 0) - (Number(b.order) || 0); })
+          .map(function (st, i) {
+            return { phase: st.phase, title: st.title, order: i, owner: st.owner || "" };
+          });
+      }
+    }
+
     KV.apiPost("addCamp", campPayload).then(function (result) {
-      return KV.apiPost("addSteps", { campId: result.id, steps: KV.buildDefaultSteps() }).then(function () { return result.id; });
+      return KV.apiPost("addSteps", { campId: result.id, steps: nieuweStappen }).then(function () { return result.id; });
     }).then(function (newId) {
       expandedIds.add(newId);
       creatingCamp = false;
+      duplicateFromId = null;
       closeForm();
       return refresh();
     }).catch(function (err) {

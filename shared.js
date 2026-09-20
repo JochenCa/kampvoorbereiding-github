@@ -177,8 +177,13 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "1.9";
+  var VERSION = "2.0";
   var CHANGELOG = [
+    { version: "2.0", date: "2026-09-20", changes: [
+      "Je kan nu zelf een stap toevoegen aan een kamp, per fase, en een stap weer verwijderen",
+      "Knop \"Dupliceren\": maak een nieuw kamp op basis van een bestaand of gearchiveerd kamp, mét dezelfde stappenlijst",
+      "De pagina's vragen zoekmachines om de site niet op te nemen; ze blijft enkel bereikbaar via de link"
+    ]},
     { version: "1.9", date: "2026-09-20", changes: [
       "Bij \"Wie?\" op een taak verschijnen nu enkel de begeleiders van dát kamp, niet langer een vaste namenlijst",
       "Wie niet meer meegaat, verdwijnt dus vanzelf uit de suggesties"
@@ -557,7 +562,13 @@ var KV = (function () {
 
   /* ---------------- Render ---------------- */
 
-  function renderCampCard(camp, campSteps, expanded) {
+  /** `opts` bepaalt welke knoppen verschijnen:
+   *    stepsEditable  — "+ stap" per fase en een kruisje per stap
+   *    duplicable     — knop "Dupliceren" tussen de kampacties
+   *  Beide staan standaard uit, zodat een pagina die ze niet afhandelt
+   *  ook geen knoppen toont die niets doen. */
+  function renderCampCard(camp, campSteps, expanded, opts) {
+    opts = opts || {};
     campSteps = campSteps.slice().sort(function (a, b) { return a.order - b.order; });
     var doneCount = campSteps.filter(function (s) { return s.done; }).length;
     var total = campSteps.length;
@@ -598,7 +609,10 @@ var KV = (function () {
       var phaseDone = list.filter(function (s) { return s.done; }).length;
       return '<section class="phase">' +
         '<h4>' + escapeHtml(phase) + ' <span class="phase-count">' + phaseDone + '/' + list.length + '</span></h4>' +
-        '<ul class="steps">' + list.map(function (s) { return renderStepRow(s, datalistId); }).join("") + '</ul>' +
+        '<ul class="steps">' + list.map(function (s) { return renderStepRow(s, datalistId, opts.stepsEditable); }).join("") + '</ul>' +
+        (opts.stepsEditable
+          ? '<button type="button" class="add-step" data-add-step="' + escapeHtml(phase) + '">+ stap toevoegen</button>'
+          : '') +
       '</section>';
     }).join("");
 
@@ -620,6 +634,7 @@ var KV = (function () {
             '<a class="btn small" href="budget.html?id=' + encodeURIComponent(camp.id) + '">Budget</a>' +
             '<a class="btn small" href="fiche.html?id=' + encodeURIComponent(camp.id) + '" target="_blank" rel="noopener">Fiche afdrukken</a>' +
             '<button type="button" class="btn small" data-edit="' + camp.id + '">Bewerken</button>' +
+            (opts.duplicable ? '<button type="button" class="btn small" data-duplicate="' + camp.id + '">Dupliceren</button>' : '') +
             '<button type="button" class="btn small" data-archive-toggle="' + camp.id + '" data-archive-value="' + (camp.archived ? "false" : "true") + '">' + (camp.archived ? "Terug naar actief" : "Archiveren") + '</button>' +
           '</div>' +
         '</div>' +
@@ -629,7 +644,7 @@ var KV = (function () {
 
   /** `datalistId` is leeg wanneer het kamp nog geen begeleiders heeft; dan
    *  blijft het veld een gewoon tekstvak zonder suggesties. */
-  function renderStepRow(step, datalistId) {
+  function renderStepRow(step, datalistId, deletable) {
     var extra = stepStatusClass(step);
     var cls = "step" + (step.done ? " is-done" : "") + (extra ? " " + extra : "");
     return '<li class="' + cls + '" data-step-id="' + step.id + '">' +
@@ -638,6 +653,10 @@ var KV = (function () {
       '<input type="date" class="step-date" data-step-date="' + step.id + '" value="' + escapeHtml(step.targetDate || "") + '">' +
       '<input type="text" class="step-owner"' + (datalistId ? ' list="' + datalistId + '"' : '') +
         ' placeholder="Wie?" data-step-owner="' + step.id + '" value="' + escapeHtml(step.owner || "") + '">' +
+      (deletable
+        ? '<button type="button" class="step-del" data-step-delete="' + step.id +
+          '" data-step-name="' + escapeHtml(step.title) + '" title="Deze stap verwijderen" aria-label="Stap verwijderen">×</button>'
+        : '') +
     '</li>';
   }
 
@@ -677,6 +696,33 @@ var KV = (function () {
         var id = inp.getAttribute("data-step-owner");
         apiPost("updateStep", { id: id, fields: { owner: inp.value.trim() } }).then(handlers.onSaved).catch(handlers.onError);
       });
+    });
+
+    var dupBtn = card.querySelector('[data-duplicate]');
+    if (dupBtn && handlers.onDuplicate) dupBtn.addEventListener("click", function () { handlers.onDuplicate(camp); });
+
+    card.querySelectorAll('[data-add-step]').forEach(function (btn) {
+      if (!handlers.onAddStep) return;
+      btn.addEventListener("click", function () {
+        handlers.onAddStep(camp.id, btn.getAttribute("data-add-step"));
+      });
+    });
+    card.querySelectorAll('[data-step-delete]').forEach(function (btn) {
+      if (!handlers.onDeleteStep) return;
+      btn.addEventListener("click", function () {
+        handlers.onDeleteStep(btn.getAttribute("data-step-delete"), btn.getAttribute("data-step-name") || "");
+      });
+    });
+  }
+
+  /** Voegt één stap toe aan een bestaand kamp, achteraan in die fase.
+   *  `campSteps` dient enkel om het volgnummer te bepalen. */
+  function addStepToCamp(campId, phase, title, campSteps) {
+    var inPhase = (campSteps || []).filter(function (s) { return s.phase === phase; });
+    var maxOrder = inPhase.reduce(function (m, s) { return Math.max(m, Number(s.order) || 0); }, 0);
+    return apiPost("addSteps", {
+      campId: campId,
+      steps: [{ phase: phase, title: title, order: maxOrder + 1 }]
     });
   }
 
@@ -735,6 +781,7 @@ var KV = (function () {
     normalizeDateStr: normalizeDateStr, formatDateNL: formatDateNL, boolish: boolish, formatEUR: formatEUR, stepStatusClass: stepStatusClass,
     openConnectionDialog: openConnectionDialog,
     typeLabel: typeLabel, stepsForCamp: stepsForCamp, buildDefaultSteps: buildDefaultSteps,
+    addStepToCamp: addStepToCamp,
     begeleiderOptions: begeleiderOptions,
     parseGuides: parseGuides, formatGuides: formatGuides, guideNames: guideNames,
     renderSetupBanner: renderSetupBanner,

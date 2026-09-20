@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Archief — Kampvoorbereiding</title>
 <link rel="stylesheet" href="shared.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -194,7 +195,7 @@
       slot.innerHTML = "";
     } else {
       slot.innerHTML = '<div class="camps-section">' + archived.map(function (c) {
-        return KV.renderCampCard(c, KV.stepsForCamp(steps, c.id), expandedIds.has(c.id));
+        return KV.renderCampCard(c, KV.stepsForCamp(steps, c.id), expandedIds.has(c.id), { duplicable: true });
       }).join("") + '</div>';
     }
 
@@ -209,6 +210,11 @@
         },
         onDelete: requestDelete,
         onEdit: openEditForm,
+        // Het formulier staat op de hoofdpagina, dus dupliceren gebeurt daar.
+        // Dit is de belangrijkste route: het kamp van vorig jaar staat hier.
+        onDuplicate: function (camp) {
+          location.href = "kampvoorbereiding.html?dupliceer=" + encodeURIComponent(camp.id);
+        },
         onSaved: refresh,
         onError: showApiError
       });
