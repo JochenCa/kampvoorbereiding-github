@@ -18,7 +18,7 @@ Dit is de map die je naar GitHub uploadt om de tool live te hosten. De Apps Scri
    - Laat "Add a README file" en de rest **uitgevinkt** — we uploaden zelf alle bestanden.
 4. Klik **Create repository**.
 5. Op de lege repo-pagina die nu verschijnt: klik de link **"uploading an existing file"** (of bovenaan **Add file → Upload files**).
-6. Sleep alle bestanden uit déze map (`index.html`, `kampvoorbereiding.html`, `archief.html`, `budget.html`, `overzicht.html`, `fiche.html`, `shared.css`, `shared.js`) naar het uploadvak. (Dit README-bestand hoeft niet mee, maar mag gerust ook mee — het is niet gevoelig.)
+6. Sleep alle bestanden uit déze map (`index.html`, `kampvoorbereiding.html`, `archief.html`, `budget.html`, `overzicht.html`, `fiche.html`, `noodkaart.html`, `terugblik.html`, `shared.css`, `shared.js`) naar het uploadvak. (Dit README-bestand hoeft niet mee, maar mag gerust ook mee — het is niet gevoelig.)
 7. Scrol naar onder, typ een korte commit-boodschap (bv. "Eerste versie") en klik **Commit changes**.
 
 ## Stap voor stap: GitHub Pages activeren

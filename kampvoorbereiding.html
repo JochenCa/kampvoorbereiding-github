@@ -292,12 +292,7 @@
     active.forEach(function (camp) {
       KV.bindCampCard(document, camp, {
         onToggleExpand: function (id) { if (expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id); render(); },
-        onArchiveToggle: function (id, val) {
-          var c = camps.find(function (x) { return x.id === id; });
-          if (c) c.archived = val;
-          render();
-          KV.apiPost("updateCamp", { id: id, fields: { archived: val } }).catch(showApiError);
-        },
+        onArchiveToggle: archiveToggle,
         onDelete: requestDelete,
         onEdit: openEditForm,
         onDuplicate: openDuplicateForm,
@@ -308,6 +303,23 @@
         onError: showApiError
       });
     });
+  }
+
+  /** Archiveren gaat altijd door. Is de terugblik nog leeg, dan vragen we of
+   *  je die meteen wil invullen — dat is het moment waarop alles nog vers zit.
+   *  De vraag komt vóór het opslaan, maar het doorsturen pas erna: wie te snel
+   *  van pagina wisselt, breekt anders de lopende opslag af. */
+  function archiveToggle(id, val) {
+    var c = camps.find(function (x) { return x.id === id; });
+    var nuInvullen = val && c && !KV.heeftTerugblik(c) && window.confirm(
+      "\"" + c.name + "\" wordt gearchiveerd.\n\n" +
+      "De terugblik van dit kamp is nog leeg. Wil je hem nu invullen?\n\n" +
+      "Annuleren = enkel archiveren. Je kan de terugblik later nog invullen vanuit het archief.");
+    if (c) c.archived = val;
+    render();
+    KV.apiPost("updateCamp", { id: id, fields: { archived: val } }).then(function () {
+      if (nuInvullen) location.href = "terugblik.html?id=" + encodeURIComponent(id);
+    }).catch(showApiError);
   }
 
   function openEditForm(camp) {
@@ -473,6 +485,11 @@
     // vinkjes en zonder datums, want die horen bij de vorige editie.
     var nieuweStappen = KV.buildDefaultSteps(campPayload);
     if (duplicateFromId) {
+      // Klimzaal en verzekering blijven van jaar tot jaar gelijk; de rest van
+      // de noodkaart (verblijf, nummers ter plaatse, gsm's) hoort bij dat jaar.
+      var bronKamp = camps.find(function (c) { return c.id === duplicateFromId; });
+      if (bronKamp) campPayload.emergency = JSON.stringify(KV.noodinfoVoorDuplicaat(bronKamp.emergency));
+
       var bron = KV.stepsForCamp(steps, duplicateFromId);
       if (bron.length) {
         nieuweStappen = bron

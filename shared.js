@@ -197,8 +197,15 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "2.2";
+  var VERSION = "2.3";
   var CHANGELOG = [
+    { version: "2.3", date: "2026-09-24", changes: [
+      "Nieuwe knop \"Noodkaart\" op elke kampkaart: één A4 met noodnummers van het land, verblijfplaatsen, gsm's van de begeleiders, klimzaal en verzekering",
+      "Per kamp een lijst verblijfplaatsen (hutten, camping), die ook in de terugblik terugkomt",
+      "Nieuwe knop \"Terugblik\": route per dag, hutten, groep en werkpunten na het kamp, met export naar de routedatabank",
+      "Wie een kamp archiveert zonder terugblik, krijgt de vraag om die meteen in te vullen",
+      "Bij dupliceren gaan het contact van de klimzaal en de verzekering mee naar het nieuwe kamp"
+    ]},
     { version: "2.2", date: "2026-09-20", changes: [
       "Een nieuw kamp krijgt meteen een volledige planning: elke stap krijgt een streefdatum, gerekend vanaf de vertrekdatum",
       "Knop \"Datums invullen\" voor bestaande kampen, die enkel de lege datums aanvult",
@@ -356,6 +363,327 @@ var KV = (function () {
         ? "Opent de gedeelde map — zoek daarin Routedatabank, landen, " + LANDLABELS[land]
         : "Opent de gedeelde map met de routedatabank. Zet het land bij de bestemming om rechtstreeks bij het juiste land uit te komen."
     };
+  }
+
+  /* ---------------- Noodkaart: vaste noodnummers per land ----------------
+     Enkel de ALGEMENE nummers, die voor het hele land gelden. Lokale nummers
+     (bergredding van de vallei, ziekenhuis) vul je per kamp in op de noodkaart.
+
+     Deze lijst moet één keer door een begeleider nagekeken worden, bv. tegen
+     het reisadvies van FOD Buitenlandse Zaken (diplomatie.belgium.be) of de
+     bron die per land vermeld staat. Vul daarna NOODNUMMERS_NAGEKEKEN in: tot
+     dan toont de noodkaart dat de nummers nog niet gecontroleerd zijn. Een fout
+     nummer op een noodkaart is erger dan geen nummer. */
+  var NOODNUMMERS_NAGEKEKEN = { datum: "2026-09-24", door: "" }; // bij een volgende controle: datum aanpassen, naam mag erbij
+  var NOODNUMMERS = {
+    frankrijk: { label: "Frankrijk", bron: "service-public.fr", nummers: [
+      { nr: "112", wat: "Europees noodnummer, ook voor bergredding (PGHM / CRS)" },
+      { nr: "15", wat: "SAMU, medische spoed" }
+    ]},
+    italie: { label: "Italië", bron: "cnsas.it (Soccorso Alpino)", nummers: [
+      { nr: "112", wat: "Europees noodnummer" },
+      { nr: "118", wat: "Medische spoed en bergredding (CNSAS)" }
+    ]},
+    oostenrijk: { label: "Oostenrijk", bron: "bergrettung.at", nummers: [
+      { nr: "112", wat: "Europees noodnummer" },
+      { nr: "140", wat: "Alpiene noodoproep, bergredding" },
+      { nr: "144", wat: "Ambulance" }
+    ]},
+    duitsland: { label: "Duitsland", bron: "bergwacht.de", nummers: [
+      { nr: "112", wat: "Europees noodnummer, ook voor ambulance en Bergwacht" },
+      { nr: "110", wat: "Politie" }
+    ]},
+    slovenie: { label: "Slovenië", bron: "grzs.si (Gorska reševalna zveza)", nummers: [
+      { nr: "112", wat: "Europees noodnummer, ook voor bergredding" },
+      { nr: "113", wat: "Politie" }
+    ]},
+    spanje: { label: "Spanje", bron: "guardiacivil.es", nummers: [
+      { nr: "112", wat: "Europees noodnummer, ook voor bergredding" },
+      { nr: "062", wat: "Guardia Civil (bergredding GREIM)" }
+    ]},
+    zwitserland: { label: "Zwitserland", bron: "rega.ch", nummers: [
+      { nr: "112", wat: "Europees noodnummer, wordt doorgeschakeld" },
+      { nr: "144", wat: "Ambulance en bergredding" },
+      { nr: "1414", wat: "Rega, luchtredding" }
+    ]}
+  };
+
+  /** Zoekt het land voor de noodkaart in de vrij ingetypte bestemming. Kent
+   *  ook Zwitserland, dat (nog) geen map heeft in de routedatabank. */
+  function landVoorNoodkaart(destination) {
+    var tekst = zonderAccenten(destination);
+    for (var sleutel in NOODNUMMERS) {
+      if (Object.prototype.hasOwnProperty.call(NOODNUMMERS, sleutel) &&
+          tekst.indexOf(sleutel) !== -1) return sleutel;
+    }
+    return "";
+  }
+
+  /* ---------------- Verblijfplaatsen, noodkaart en terugblik ----------------
+     Drie kolommen in de Sheet die elk één JSON-tekst bevatten. Onderstaande
+     functies zetten die om naar een object met álle velden aanwezig, zodat een
+     pagina nooit hoeft na te gaan of iets bestaat. Een lege of beschadigde cel
+     geeft gewoon de lege vorm terug. */
+  var API_VERSIE_NODIG = 3; // zie API_VERSION in apps-script.gs
+
+  function leesJson(v) {
+    if (v && typeof v === "object") return v;
+    if (!v) return null;
+    try { return JSON.parse(String(v)); } catch (e) { return null; }
+  }
+  function tekst(v) { return v == null ? "" : String(v); }
+
+  var VERBLIJF_TYPES = { hut: "Hut", camping: "Camping", andere: "Andere" };
+
+  function normVerblijf(s) {
+    s = s || {};
+    return {
+      naam: tekst(s.naam), type: VERBLIJF_TYPES[s.type] ? s.type : "hut",
+      datum: normalizeDateStr(s.datum), nachten: Math.max(1, parseInt(s.nachten, 10) || 1),
+      telefoon: tekst(s.telefoon), coords: tekst(s.coords)
+    };
+  }
+  function normVerblijven(v) {
+    var lijst = leesJson(v);
+    return Array.isArray(lijst) ? lijst.map(normVerblijf) : [];
+  }
+
+  function normContact(c) { c = c || {}; return { naam: tekst(c.naam), telefoon: tekst(c.telefoon) }; }
+
+  function normNoodinfo(v) {
+    var e = leesJson(v) || {};
+    var gsms = {};
+    if (e.gsms && typeof e.gsms === "object") {
+      Object.keys(e.gsms).forEach(function (k) { gsms[k] = tekst(e.gsms[k]); });
+    }
+    var zh = e.ziekenhuis || {}, vz = e.verzekering || {};
+    return {
+      land: NOODNUMMERS[e.land] ? e.land : "",
+      bergredding: normContact(e.bergredding),
+      ziekenhuis: { naam: tekst(zh.naam), telefoon: tekst(zh.telefoon), adres: tekst(zh.adres) },
+      gsms: gsms,
+      achterwacht: normContact(e.achterwacht),
+      klimzaal: normContact(e.klimzaal),
+      verzekering: { naam: tekst(vz.naam), polis: tekst(vz.polis), telefoon: tekst(vz.telefoon) },
+      medischeFiches: tekst(e.medischeFiches)
+    };
+  }
+
+  /** Wat een gedupliceerd kamp meekrijgt van de noodkaart: enkel wat van jaar
+   *  tot jaar hetzelfde blijft. Nummers ter plaatse, gsm's en de plaats van de
+   *  medische fiches horen bij dat ene kamp. */
+  function noodinfoVoorDuplicaat(bron) {
+    var n = normNoodinfo(bron);
+    var leeg = normNoodinfo(null);
+    leeg.klimzaal = n.klimzaal;
+    leeg.verzekering = n.verzekering;
+    return leeg;
+  }
+
+  var GESCHIKT_VOOR = { "-18": "-18-kamp", "+18": "+18-kamp", "winter": "Winterkamp" };
+  var TERUGKEREN = { ja: "Ja", twijfel: "Misschien", nee: "Nee" };
+
+  function normDag(d) {
+    d = d || {};
+    return { van: tekst(d.van), naar: tekst(d.naar), km: tekst(d.km), stijgen: tekst(d.stijgen),
+             dalen: tekst(d.dalen), uren: tekst(d.uren), afwijking: tekst(d.afwijking) };
+  }
+  function normPlek(p) {
+    p = p || {};
+    return { naam: tekst(p.naam), type: VERBLIJF_TYPES[p.type] ? p.type : "hut", contact: tekst(p.contact),
+             ervaring: tekst(p.ervaring), terug: TERUGKEREN[p.terug] ? p.terug : "" };
+  }
+
+  /** Geeft null zolang er nooit een terugblik opgeslagen werd. */
+  function normTerugblik(v) {
+    var r = leesJson(v);
+    if (!r || typeof r !== "object") return null;
+    var g = r.groep || {}, w = r.werkpunten || {};
+    return {
+      bijgewerkt: normalizeDateStr(r.bijgewerkt), door: tekst(r.door),
+      dagen: Array.isArray(r.dagen) ? r.dagen.map(normDag) : [],
+      plekken: Array.isArray(r.plekken) ? r.plekken.map(normPlek) : [],
+      groep: {
+        deelnemers: tekst(g.deelnemers), begeleiders: tekst(g.begeleiders), niveau: tekst(g.niveau),
+        geschiktVoor: Array.isArray(g.geschiktVoor) ? g.geschiktVoor.filter(function (x) { return GESCHIKT_VOOR[x]; }) : []
+      },
+      werkpunten: { goed: tekst(w.goed), beter: tekst(w.beter), logistiek: tekst(w.logistiek), tips: tekst(w.tips) }
+    };
+  }
+
+  function heeftTerugblik(camp) { return !!(camp && camp.review && camp.review.bijgewerkt); }
+
+  /** Een eerste terugblik, vooraf ingevuld met wat er al bekend is: de
+   *  verblijfplaatsen, en bij een huttentocht de dagen die daartussen liggen
+   *  (dag 1 naar de eerste hut, dan van hut naar hut, de laatste dag terug). */
+  function nieuweTerugblik(camp) {
+    var verblijven = (camp && camp.stays) || [];
+    var hutten = verblijven.filter(function (s) { return s.type === "hut" && s.naam; })
+      .slice().sort(function (a, b) { return (a.datum || "9999") < (b.datum || "9999") ? -1 : 1; });
+    var dagen = hutten.length
+      ? hutten.map(function (h, i) { return normDag({ van: i ? hutten[i - 1].naam : "", naar: h.naam }); })
+          .concat([normDag({ van: hutten[hutten.length - 1].naam })])
+      : [normDag()];
+    var aantalBegeleiders = guideNames(camp && camp.guides).length;
+    return {
+      bijgewerkt: "", door: "",
+      dagen: dagen,
+      plekken: verblijven.filter(function (s) { return s.naam; }).map(function (s) {
+        return normPlek({ naam: s.naam, type: s.type, contact: s.telefoon });
+      }),
+      groep: { deelnemers: "", begeleiders: aantalBegeleiders ? String(aantalBegeleiders) : "", niveau: "", geschiktVoor: camp && GESCHIKT_VOOR[camp.type] ? [camp.type] : [] },
+      werkpunten: { goed: "", beter: "", logistiek: "", tips: "" }
+    };
+  }
+
+  /** Verblijfplaatsen die later bij het kamp kwamen dan de terugblik, komen er
+   *  alsnog bij — zonder iets te wissen wat al ingevuld was. */
+  function vulPlekkenAan(review, verblijven) {
+    var bekend = {};
+    review.plekken.forEach(function (p) { bekend[p.naam.trim().toLowerCase()] = true; });
+    (verblijven || []).forEach(function (s) {
+      var sleutel = s.naam.trim().toLowerCase();
+      if (!sleutel || bekend[sleutel]) return;
+      review.plekken.push(normPlek({ naam: s.naam, type: s.type, contact: s.telefoon }));
+      bekend[sleutel] = true;
+    });
+    return review;
+  }
+
+  /* ---------------- Export naar de routedatabank ---------------- */
+
+  var NOG_AAN_TE_VULLEN = "*(nog aan te vullen)*";
+
+  /** Maakt een bestandsnaam zoals die in de routedatabank: 2026-nevache.md.
+   *  De landnaam valt weg, want het bestand staat al in de map van dat land. */
+  function databankBestandsnaam(camp) {
+    var jaar = (normalizeDateStr(camp.startDate) || todayStr()).slice(0, 4);
+    var bron = zonderAccenten(camp.destination || camp.name || "kamp");
+    Object.keys(NOODNUMMERS).forEach(function (land) { bron = bron.split(land).join(" "); });
+    var slug = bron.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
+    if (!slug) slug = zonderAccenten(camp.name || "kamp").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "kamp";
+    return jaar + "-" + slug + ".md";
+  }
+
+  /** De terugblik als Markdown, in dezelfde opbouw als de bestaande fiches in
+   *  de routedatabank (zie landen/frankrijk/2026-nevache-claree.md). Lege
+   *  velden worden "(nog aan te vullen)", zoals elders in de databank. */
+  function terugblikNaarMarkdown(camp, review) {
+    var r = review || nieuweTerugblik(camp);
+    function of(v) { v = tekst(v).trim(); return v || NOG_AAN_TE_VULLEN; }
+    function cel(v) { return tekst(v).trim().replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " "); }
+    function blok(v) { v = tekst(v).trim(); return v ? v : NOG_AAN_TE_VULLEN; }
+
+    var jaar = (normalizeDateStr(camp.startDate) || "").slice(0, 4);
+    var land = NOODNUMMERS[(camp.emergency && camp.emergency.land) || landVoorNoodkaart(camp.destination)];
+    var periode = camp.startDate ? formatDateNL(camp.startDate) + (camp.endDate ? " t.e.m. " + formatDateNL(camp.endDate) : "") : "";
+    var geschikt = r.groep.geschiktVoor.map(function (k) { return GESCHIKT_VOOR[k]; }).join(", ");
+    var groep = [];
+    if (tekst(r.groep.deelnemers).trim()) groep.push(r.groep.deelnemers.trim() + " deelnemers");
+    if (tekst(r.groep.begeleiders).trim()) groep.push(r.groep.begeleiders.trim() + " begeleiders");
+
+    var uit = [];
+    uit.push("# " + (camp.destination || camp.name) + (jaar ? " (" + jaar + ")" : ""));
+    uit.push("");
+    // "Frankrijk — Névache" bevat het land al; enkel toevoegen als het ontbreekt.
+    var landErvoor = land && zonderAccenten(camp.destination).indexOf(zonderAccenten(land.label)) === -1 ? land.label + " — " : "";
+    uit.push("- **Land/regio:** " + landErvoor + of(camp.destination));
+    uit.push("- **Laatst gebruikt (jaar):** " + (jaar || NOG_AAN_TE_VULLEN) + (periode ? " — " + periode : ""));
+    uit.push("- **Kamp:** " + camp.name + " (" + typeLabel(camp) + ")");
+    uit.push("- **Geschikt voor:** " + of(geschikt));
+    uit.push("- **Groep:** " + of(groep.join(", ")));
+    uit.push("");
+    uit.push("Bron: terugblik in de kampvoorbereiding" +
+      (r.door ? ", ingevuld door " + r.door : "") +
+      (r.bijgewerkt ? ", bijgewerkt op " + formatDateNL(r.bijgewerkt) : "") + ".");
+    uit.push("");
+
+    uit.push("## Niveau van de groep");
+    uit.push("");
+    uit.push(blok(r.groep.niveau));
+    uit.push("");
+
+    var dagen = r.dagen.filter(function (d) {
+      return d.van || d.naar || d.km || d.stijgen || d.dalen || d.uren || d.afwijking;
+    });
+    uit.push("## Overzicht van de dagen");
+    uit.push("");
+    if (!dagen.length) {
+      uit.push(NOG_AAN_TE_VULLEN);
+    } else {
+      uit.push("| Dag | Van → naar | Afstand | Hoogteverschil | Stapuren |");
+      uit.push("|---|---|---|---|---|");
+      dagen.forEach(function (d, i) {
+        var hoogte = (d.stijgen || d.dalen)
+          ? "+" + cel(d.stijgen || "?").replace(/^\+/, "") + " / -" + cel(d.dalen || "?").replace(/^-/, "") + " m"
+          : "";
+        uit.push("| " + (i + 1) + " | " + (cel(d.van) || "?") + " → " + (d.naar ? "**" + cel(d.naar) + "**" : "?") +
+          " | " + (d.km ? cel(d.km) + " km" : "") + " | " + hoogte + " | " + (d.uren ? "± " + cel(d.uren) + " u" : "") + " |");
+      });
+      var afwijkingen = [];
+      dagen.forEach(function (d, i) { if (d.afwijking.trim()) afwijkingen.push("- **Dag " + (i + 1) + ":** " + d.afwijking.trim().replace(/\n/g, " ")); });
+      if (afwijkingen.length) {
+        uit.push("");
+        uit.push("Afwijkingen van de planning:");
+        uit.push("");
+        uit = uit.concat(afwijkingen);
+      }
+    }
+    uit.push("");
+
+    var verblijven = camp.stays || [];
+    function verblijfVan(naam) {
+      var sleutel = naam.trim().toLowerCase();
+      return verblijven.filter(function (s) { return s.naam.trim().toLowerCase() === sleutel; })[0] || null;
+    }
+    var plekken = r.plekken.filter(function (p) { return p.naam.trim(); });
+    uit.push("## Verblijfplaatsen");
+    uit.push("");
+    if (!plekken.length) {
+      uit.push(NOG_AAN_TE_VULLEN);
+      uit.push("");
+    }
+    plekken.forEach(function (p) {
+      var s = verblijfVan(p.naam);
+      uit.push("### " + p.naam.trim() + " (" + VERBLIJF_TYPES[p.type].toLowerCase() + ")");
+      uit.push("");
+      if (s && s.datum) uit.push("- **Nacht(en):** vanaf " + formatDateNL(s.datum) + ", " + s.nachten + (s.nachten === 1 ? " nacht" : " nachten"));
+      uit.push("- **Boekingscontact:** " + of(p.contact));
+      if (s && s.telefoon && s.telefoon !== p.contact) uit.push("- **Telefoon:** " + s.telefoon);
+      if (s && s.coords) uit.push("- **Coördinaten:** " + s.coords);
+      uit.push("- **Zouden we terugkeren?** " + (TERUGKEREN[p.terug] || NOG_AAN_TE_VULLEN));
+      uit.push("");
+      uit.push("**Ervaring / aandachtspunten**");
+      uit.push("");
+      uit.push(blok(p.ervaring));
+      uit.push("");
+    });
+
+    uit.push("## Werkpunten & logistiek");
+    uit.push("");
+    [["Wat ging goed", r.werkpunten.goed], ["Wat kan beter", r.werkpunten.beter],
+     ["Bus, container en klimzaal", r.werkpunten.logistiek], ["Tips voor de volgende keer", r.werkpunten.tips]
+    ].forEach(function (paar) {
+      uit.push("### " + paar[0]);
+      uit.push("");
+      uit.push(blok(paar[1]));
+      uit.push("");
+    });
+
+    return uit.join("\n").replace(/\n+$/, "") + "\n";
+  }
+
+  /** Laat de browser een tekstbestand downloaden. */
+  function downloadTekst(bestandsnaam, inhoud, mime) {
+    var blob = new Blob([inhoud], { type: (mime || "text/markdown") + ";charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = bestandsnaam;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
   function todayStr() {
@@ -680,7 +1008,10 @@ var KV = (function () {
           archived: boolish(c.archived),
           startDate: normalizeDateStr(c.startDate),
           requestDate: normalizeDateStr(c.requestDate),
-          approvalDate: normalizeDateStr(c.approvalDate)
+          approvalDate: normalizeDateStr(c.approvalDate),
+          stays: normVerblijven(c.stays),
+          emergency: normNoodinfo(c.emergency),
+          review: normTerugblik(c.review)
         });
       });
       var steps = (data.steps || []).map(function (s) {
@@ -702,7 +1033,10 @@ var KV = (function () {
           date: normalizeDateStr(x.date)
         });
       });
-      return { camps: camps, steps: steps, income: income, expenses: expenses };
+      // Een oudere Apps Script-versie stuurt geen apiVersion mee.
+      var apiVersion = Number(data.apiVersion) || 1;
+      return { camps: camps, steps: steps, income: income, expenses: expenses,
+               apiVersion: apiVersion, apiUpToDate: apiVersion >= API_VERSIE_NODIG };
     });
   }
 
@@ -786,6 +1120,12 @@ var KV = (function () {
                 ' title="' + escapeHtml(rd.titel) + '">Routedatabank</a>';
             })() +
             '<a class="btn small" href="fiche.html?id=' + encodeURIComponent(camp.id) + '" target="_blank" rel="noopener">Fiche afdrukken</a>' +
+            '<a class="btn small" href="noodkaart.html?id=' + encodeURIComponent(camp.id) + '"' +
+              ' title="Verblijfplaatsen en noodnummers invullen, en de noodkaart afdrukken">Noodkaart</a>' +
+            '<a class="btn small" href="terugblik.html?id=' + encodeURIComponent(camp.id) + '"' +
+              (heeftTerugblik(camp)
+                ? ' title="Terugblik bijgewerkt op ' + escapeHtml(formatDateNL(camp.review.bijgewerkt)) + '">Terugblik ✓</a>'
+                : ' title="Na het kamp: route, hutten, groep en werkpunten invullen">Terugblik</a>') +
             '<button type="button" class="btn small" data-edit="' + camp.id + '">Bewerken</button>' +
             (opts.duplicable ? '<button type="button" class="btn small" data-duplicate="' + camp.id + '">Dupliceren</button>' : '') +
             // Verschijnt enkel wanneer er ook effectief iets in te vullen valt.
@@ -891,6 +1231,163 @@ var KV = (function () {
     });
   }
 
+  /* ---------------- Invulpagina voor één kamp (noodkaart, terugblik) ----------------
+     Anders dan de hoofdpagina ververst zo'n pagina niet om de 10 seconden: je
+     bent er een hele tijd aan het typen, en wat je invult mag niet onder je
+     vingers vervangen worden. In de plaats daarvan kijkt "Opslaan" eerst of
+     iemand anders intussen hetzelfde kamp aanpaste, en vraagt dan wat te doen.
+
+     opts:
+       pagina     — bestandsnaam, voor de kampkeuze als ?id= ontbreekt
+       onKamp     — function (camp): de pagina opbouwen met dit kamp
+       huidig     — function (camp): de waarden die deze pagina beheert, zoals
+                    ze nu in de Sheet staan (om wijzigingen van anderen te zien)
+       velden     — function (): de velden om op te slaan, als { kolom: tekst }
+       naOpslaan  — optioneel, function (): na geslaagd opslaan
+       nooitOpgeslagen — optioneel, function (camp): true als er voor dit kamp
+                    nog niets bewaard werd (de balk zegt dan niet "alles opgeslagen")
+     Verwacht in de pagina: #conn-dot, #conn-text, #banner-slot, #page-slot,
+     en een .save-bar met #save-status en #save-btn. */
+  function createEditPage(opts) {
+    var campId = new URLSearchParams(location.search).get("id");
+    var state = { camp: null, dirty: false, saving: false, apiUpToDate: true, snapshot: "", savedAt: "" };
+    var saveBtn = document.getElementById("save-btn");
+    var statusEl = document.getElementById("save-status");
+    var bar = document.querySelector(".save-bar");
+
+    renderVersionBadge();
+
+    function setConn(cls, text) {
+      document.getElementById("conn-dot").className = "dot" + (cls ? " " + cls : "");
+      document.getElementById("conn-text").textContent = text;
+    }
+
+    function updateBar() {
+      if (!saveBtn) return;
+      saveBtn.disabled = !state.camp || !state.dirty || state.saving || !state.apiUpToDate;
+      saveBtn.textContent = state.saving ? "Bezig met opslaan…" : "Opslaan";
+      if (!statusEl) return;
+      if (!state.apiUpToDate) { statusEl.className = "save-status bad"; statusEl.textContent = "Opslaan kan nog niet (zie melding bovenaan)"; }
+      else if (state.dirty) { statusEl.className = "save-status dirty"; statusEl.textContent = "Niet-opgeslagen wijzigingen"; }
+      else if (state.savedAt) { statusEl.className = "save-status ok"; statusEl.textContent = "Opgeslagen om " + state.savedAt; }
+      else if (state.camp && opts.nooitOpgeslagen && opts.nooitOpgeslagen(state.camp)) { statusEl.className = "save-status"; statusEl.textContent = "Nog nooit opgeslagen"; }
+      else { statusEl.className = "save-status"; statusEl.textContent = "Alles is opgeslagen"; }
+    }
+
+    function renderPicker(melding) {
+      if (bar) bar.hidden = true;
+      document.getElementById("page-slot").innerHTML =
+        '<div class="form-section"><h2>Kies een kamp</h2><p class="hint">' + escapeHtml(melding) + '</p>' +
+        '<div class="row-list">' + state.alle.map(function (c) {
+          return '<a class="btn" href="' + opts.pagina + '?id=' + encodeURIComponent(c.id) + '">' + escapeHtml(c.name) +
+            (c.archived ? ' <span class="pill">archief</span>' : '') + '</a>';
+        }).join("") + '</div></div>';
+    }
+
+    function start() {
+      updateBar();
+      if (SETUP_NEEDED) {
+        setConn("bad", "Nog niet ingesteld");
+        if (bar) bar.hidden = true;
+        renderSetupBanner("banner-slot");
+        return;
+      }
+      fetchAll().then(function (data) {
+        setConn("ok", "Verbonden");
+        state.alle = data.camps;
+        state.apiUpToDate = data.apiUpToDate;
+        var camp = data.camps.filter(function (c) { return c.id === campId; })[0];
+        if (!camp) {
+          renderPicker(campId ? "Geen kamp gevonden met deze link — misschien verwijderd?" : "Deze pagina werd zonder kamp geopend.");
+          return;
+        }
+        state.camp = camp;
+        state.snapshot = JSON.stringify(opts.huidig(camp));
+        if (!state.apiUpToDate) {
+          document.getElementById("banner-slot").innerHTML =
+            '<div class="banner bad"><strong>Opslaan kan nog niet.</strong> Het Apps Script op de server is nog niet bijgewerkt ' +
+            'naar de versie die deze pagina nodig heeft. Plak <code>apps-script.gs</code> opnieuw in de Apps Script-editor en ' +
+            'deploy een <strong>nieuwe versie</strong> (zie README). Tot dan kan je alles bekijken en afdrukken, maar niet bewaren.</div>';
+        }
+        if (bar) bar.hidden = false;
+        opts.onKamp(camp);
+        updateBar();
+      }).catch(function (err) {
+        setConn("bad", "Kan niet verbinden");
+        document.getElementById("banner-slot").innerHTML =
+          '<div class="banner bad">Kon de gedeelde Sheet niet bereiken (' + escapeHtml(err && err.message ? err.message : String(err)) +
+          '). Herlaad de pagina om opnieuw te proberen.</div>';
+      });
+    }
+
+    function markDirty() { if (!state.dirty) { state.dirty = true; updateBar(); } }
+
+    function save() {
+      if (!state.camp || !state.dirty || state.saving || !state.apiUpToDate) return Promise.resolve(false);
+      state.saving = true; updateBar();
+      // Eerst kijken of iemand anders intussen hetzelfde aanpaste. Zonder deze
+      // controle zou de laatste die opslaat stil het werk van de ander wissen.
+      return fetchAll().then(function (data) {
+        var vers = data.camps.filter(function (c) { return c.id === state.camp.id; })[0];
+        if (!vers) throw new Error("dit kamp bestaat niet meer — misschien intussen verwijderd");
+        var nuInSheet = JSON.stringify(opts.huidig(vers));
+        if (nuInSheet !== state.snapshot && !window.confirm(
+          "Iemand anders heeft dit intussen ook aangepast en opgeslagen.\n\n" +
+          "OK = jouw versie opslaan (de andere wijzigingen gaan verloren).\n" +
+          "Annuleren = niets opslaan, zodat je eerst kan kijken (herlaad de pagina; wat je hier typte, gaat dan wel verloren).")) {
+          return false;
+        }
+        var fields = opts.velden();
+        return apiPost("updateCamp", { id: state.camp.id, fields: fields }).then(function () {
+          // Lokaal bijwerken in dezelfde vorm als fetchAll het zou teruggeven.
+          var normaliseer = { stays: normVerblijven, emergency: normNoodinfo, review: normTerugblik };
+          Object.keys(fields).forEach(function (k) {
+            state.camp[k] = normaliseer[k] ? normaliseer[k](fields[k]) : fields[k];
+          });
+          state.snapshot = JSON.stringify(opts.huidig(state.camp));
+          state.dirty = false;
+          var nu = new Date();
+          state.savedAt = String(nu.getHours()).padStart(2, "0") + ":" + String(nu.getMinutes()).padStart(2, "0");
+          if (opts.naOpslaan) opts.naOpslaan();
+          return true;
+        });
+      }).catch(function (err) {
+        alert("Opslaan is niet gelukt: " + (err && err.message ? err.message : "onbekende fout") + ". Je gegevens staan nog op het scherm; probeer opnieuw.");
+        return false;
+      }).then(function (ok) {
+        state.saving = false; updateBar();
+        return ok;
+      });
+    }
+
+    if (saveBtn) saveBtn.addEventListener("click", function () { save(); });
+    document.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) { e.preventDefault(); save(); }
+    });
+    window.addEventListener("beforeunload", function (e) {
+      if (state.dirty) { e.preventDefault(); e.returnValue = ""; }
+    });
+
+    return {
+      start: start, save: save, markDirty: markDirty,
+      camp: function () { return state.camp; },
+      isDirty: function () { return state.dirty; }
+    };
+  }
+
+  /** Leest en zet een waarde via een pad als "ziekenhuis.telefoon". */
+  function leesPad(obj, pad) {
+    return pad.split(".").reduce(function (o, k) { return o == null ? undefined : o[k]; }, obj);
+  }
+  function zetPad(obj, pad, waarde) {
+    var delen = pad.split("."), o = obj;
+    for (var i = 0; i < delen.length - 1; i++) {
+      if (o[delen[i]] == null || typeof o[delen[i]] !== "object") o[delen[i]] = {};
+      o = o[delen[i]];
+    }
+    o[delen[delen.length - 1]] = waarde;
+  }
+
   /* ---------------- Concept-opslag (nieuw-kamp-formulier) ---------------- */
   /* Lokaal in de browser (niet gedeeld) — beschermt enkel tegen per ongeluk
      sluiten/herladen terwijl je een nieuw kamp aan het invullen bent. */
@@ -948,6 +1445,13 @@ var KV = (function () {
     typeLabel: typeLabel, stepsForCamp: stepsForCamp, buildDefaultSteps: buildDefaultSteps,
     missingStepDates: missingStepDates, targetDateForTitle: targetDateForTitle, shiftDate: shiftDate,
     landVanBestemming: landVanBestemming, routedatabankKnop: routedatabankKnop,
+    NOODNUMMERS: NOODNUMMERS, NOODNUMMERS_NAGEKEKEN: NOODNUMMERS_NAGEKEKEN, landVoorNoodkaart: landVoorNoodkaart,
+    VERBLIJF_TYPES: VERBLIJF_TYPES, GESCHIKT_VOOR: GESCHIKT_VOOR, TERUGKEREN: TERUGKEREN,
+    normVerblijf: normVerblijf, normVerblijven: normVerblijven, normNoodinfo: normNoodinfo, noodinfoVoorDuplicaat: noodinfoVoorDuplicaat,
+    normDag: normDag, normPlek: normPlek, normTerugblik: normTerugblik, heeftTerugblik: heeftTerugblik,
+    nieuweTerugblik: nieuweTerugblik, vulPlekkenAan: vulPlekkenAan,
+    databankBestandsnaam: databankBestandsnaam, terugblikNaarMarkdown: terugblikNaarMarkdown, downloadTekst: downloadTekst,
+    createEditPage: createEditPage, leesPad: leesPad, zetPad: zetPad,
     addStepToCamp: addStepToCamp,
     begeleiderOptions: begeleiderOptions,
     parseGuides: parseGuides, formatGuides: formatGuides, guideNames: guideNames,

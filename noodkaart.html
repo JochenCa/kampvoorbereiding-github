@@ -1,0 +1,437 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Noodkaart</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  .preview-title{ font-size: 13px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing:.06em; color: var(--ink-soft); margin: 30px 0 10px; font-weight: 500; }
+
+  /* ---- de kaart zelf ---- */
+  .nk-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 28px 30px; }
+  .nk-head{ display:flex; justify-content:space-between; align-items:flex-start; gap: 16px; border-bottom: 3px solid var(--bad); padding-bottom: 12px; margin-bottom: 16px; }
+  .nk-label{ font-family: var(--font-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--bad); font-weight: 500; }
+  .nk-head h1{ font-size: 25px; margin-top: 2px; }
+  .nk-sub{ color: var(--ink-soft); font-size: 13.5px; margin-top: 2px; }
+  .nk-land{ font-family: var(--font-display); font-size: 19px; font-weight: 600; text-align: right; white-space: nowrap; }
+  .nk-nummers{ display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .nk-nr{ border: 2px solid var(--bad); border-radius: 7px; padding: 8px 12px; }
+  .nk-nr .n{ display:block; font-family: var(--font-mono); font-size: 30px; font-weight: 500; line-height: 1.1; color: var(--bad); }
+  .nk-nr .w{ display:block; font-size: 12.5px; line-height: 1.35; margin-top: 2px; }
+  .nk-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  .nk-section{ margin-bottom: 16px; }
+  .nk-section h2{ font-size: 11.5px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--accent); border-bottom: 1px solid var(--line-strong); padding-bottom: 4px; margin-bottom: 7px; font-weight: 500; }
+  .nk-rij{ display:flex; justify-content:space-between; gap: 12px; font-size: 13.5px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .nk-rij:last-child{ border-bottom: none; }
+  .nk-rij .k{ color: var(--ink-soft); }
+  .nk-rij .v{ text-align: right; font-weight: 500; }
+  .nk-rij .v small{ display:block; font-weight: 400; color: var(--ink-soft); font-size: 12px; }
+  .nk-tel{ font-family: var(--font-mono); color: inherit; text-decoration: none; white-space: nowrap; }
+  a.nk-tel:hover{ text-decoration: underline; }
+  .nk-leeg{ color: var(--line-strong); font-weight: 400; }
+  .nk-table{ width:100%; border-collapse: collapse; font-size: 13px; }
+  .nk-table th{ text-align:left; font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing:.04em; color: var(--ink-soft); font-weight: 500; padding: 3px 8px 4px 0; border-bottom: 1px solid var(--line); }
+  .nk-table td{ padding: 5px 8px 5px 0; border-bottom: 1px dashed var(--line); vertical-align: top; }
+  .nk-table tr:last-child td{ border-bottom: none; }
+  .nk-table .type{ display:block; font-size: 11.5px; color: var(--ink-soft); }
+  .nk-table .coords{ font-family: var(--font-mono); font-size: 12px; }
+  .nk-med{ background: var(--surface-2); border-radius: 6px; padding: 10px 12px; font-size: 13.5px; }
+  .nk-foot{ margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-soft); display:flex; justify-content:space-between; gap: 12px; flex-wrap: wrap; }
+  .nk-foot .let-op{ color: var(--bad); font-weight: 500; }
+
+  @media (max-width: 640px){
+    .nk-card{ padding: 20px 16px; }
+    .nk-head{ flex-direction: column; gap: 4px; }
+    .nk-land{ text-align: left; }
+    .nk-grid{ grid-template-columns: 1fr; }
+    .nk-table thead{ display:none; }
+    .nk-table tr{ display:block; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+    .nk-table tr:last-child{ border-bottom: none; }
+    .nk-table td{ display:block; border: none; padding: 1px 0; }
+  }
+
+  /* Afdrukken: enkel de kaart, zwart-wit, op één A4. */
+  @page{ size: A4; margin: 12mm; }
+  @media print {
+    .no-print{ display:none !important; }
+    html, body{ background: #fff; }
+    body{ font-size: 12px; }
+    .page{ max-width: none; padding: 0; }
+    :root{ --ink: #000; --ink-soft: #444; --surface: #fff; --surface-2: #f1f1f1; --line: #bbb; --line-strong: #888; --accent: #000; --bad: #000; }
+    .nk-card{ border: none; padding: 0; }
+    .nk-nr .n{ font-size: 26px; }
+    .nk-grid{ grid-template-columns: 1fr 1fr; }
+    .nk-section, .nk-nr, .nk-table tr{ break-inside: avoid; }
+  }
+</style>
+
+<div class="page">
+  <header class="top no-print">
+    <div>
+      <div class="eyebrow"><span class="dot" id="conn-dot"></span><span id="conn-text">Verbinden…</span></div>
+      <h1>Noodkaart</h1>
+      <p class="dek" id="dek">Verblijfplaatsen en noodnummers van één kamp, samen op één A4 om af te drukken en mee te nemen.</p>
+      <a class="top-link" id="back-link" href="kampvoorbereiding.html">← Terug naar Kampvoorbereiding</a>
+    </div>
+  </header>
+
+  <div id="banner-slot" class="no-print"></div>
+  <div id="page-slot"></div>
+
+  <div class="save-bar no-print" hidden>
+    <span class="save-status" id="save-status"></span>
+    <div class="save-actions">
+      <button class="btn" id="print-btn" type="button">Afdrukken</button>
+      <button class="btn primary" id="save-btn" type="button" disabled>Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var esc = KV.escapeHtml;
+  var WEEKDAGEN = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+
+  var camp = null;
+  var draft = null; // { stays: [...], emergency: {...} } — wat er nu op het scherm staat
+
+  var page = KV.createEditPage({
+    pagina: "noodkaart.html",
+    huidig: function (c) { return { stays: c.stays, emergency: c.emergency }; },
+    onKamp: function (c) {
+      camp = c;
+      draft = JSON.parse(JSON.stringify({ stays: c.stays, emergency: c.emergency }));
+      // Nog geen land gekozen: afleiden uit de bestemming. Telt niet als
+      // wijziging — zolang niemand opslaat, blijft dit gewoon een voorstel.
+      if (!draft.emergency.land) draft.emergency.land = KV.landVoorNoodkaart(c.destination);
+      document.title = "Noodkaart — " + c.name;
+      document.getElementById("dek").textContent = c.name + (c.destination ? " · " + c.destination : "");
+      if (c.archived) {
+        var back = document.getElementById("back-link");
+        back.href = "archief.html";
+        back.textContent = "← Terug naar Archief";
+      }
+      renderAll();
+    },
+    velden: function () {
+      // Enkel de gsm's van wie nu begeleider is: wie niet meer meegaat, hoort
+      // niet meer op de kaart en ook niet in de Sheet.
+      var gsms = {};
+      begeleiders().forEach(function (naam) {
+        var nr = (draft.emergency.gsms[naam] || "").trim();
+        if (nr) gsms[naam] = nr;
+      });
+      draft.emergency.gsms = gsms;
+      // Een plek zonder naam, telefoon of coördinaten is leeg, ook al kreeg
+      // ze bij het toevoegen vanzelf een datum.
+      return {
+        stays: JSON.stringify(draft.stays.filter(function (s) {
+          return s.naam.trim() || s.telefoon.trim() || s.coords.trim();
+        })),
+        emergency: JSON.stringify(draft.emergency)
+      };
+    },
+    naOpslaan: function () {
+      draft.stays = JSON.parse(JSON.stringify(camp.stays));
+      renderAll();
+    }
+  });
+
+  function begeleiders() { return KV.guideNames(camp && camp.guides); }
+
+  function renderAll() {
+    document.getElementById("page-slot").innerHTML =
+      '<div class="no-print" id="form-wrap"></div>' +
+      '<h2 class="preview-title no-print">Zo ziet de kaart eruit op papier</h2>' +
+      '<div id="card-slot"></div>';
+    renderForm();
+    renderCard();
+  }
+
+  /* ---------------- formulier ---------------- */
+
+  function veld(label, pad, opts) {
+    opts = opts || {};
+    var waarde = KV.leesPad(draft, pad) || "";
+    var id = "f-" + pad.replace(/\./g, "-");
+    return '<div class="form-field' + (opts.span2 ? " span2" : "") + '"><label for="' + id + '">' + esc(label) + '</label>' +
+      '<input id="' + id + '" type="' + (opts.type || "text") + '" data-path="' + esc(pad) + '" value="' + esc(waarde) + '"' +
+      (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') + '></div>';
+  }
+
+  function renderForm() {
+    var e = draft.emergency;
+    var land = KV.NOODNUMMERS[e.land];
+    var namen = begeleiders();
+    var nagekeken = KV.NOODNUMMERS_NAGEKEKEN.datum;
+
+    document.getElementById("form-wrap").innerHTML =
+      // --- land en nummers ter plaatse ---
+      '<section class="form-section">' +
+        '<h2>Land en nummers ter plaatse</h2>' +
+        '<p class="hint">De algemene noodnummers komen vanzelf uit het land. Bergredding en ziekenhuis zoek je per kamp op, voor de vallei waar je zit.</p>' +
+        '<div class="form-grid">' +
+          '<div class="form-field"><label for="nk-land">Land</label><select id="nk-land">' +
+            '<option value="">— kies het land —</option>' +
+            Object.keys(KV.NOODNUMMERS).map(function (k) {
+              return '<option value="' + k + '"' + (e.land === k ? " selected" : "") + '>' + esc(KV.NOODNUMMERS[k].label) + '</option>';
+            }).join("") +
+          '</select></div>' +
+          '<div class="form-field"><label>Algemene nummers</label>' +
+            (land
+              ? '<ul class="nummers-ro">' + land.nummers.map(function (n) { return '<li><strong>' + esc(n.nr) + '</strong>' + esc(n.wat) + '</li>'; }).join("") + '</ul>'
+              : '<span class="field-hint">Kies eerst het land. Tot dan staat enkel 112 op de kaart.</span>') +
+          '</div>' +
+        '</div>' +
+        (nagekeken ? '' :
+          '<div class="banner" style="margin:16px 0 0">De algemene nummers per land zijn <strong>nog niet nagekeken</strong> door een begeleider. ' +
+          'Dat gebeurt één keer, in <code>shared.js</code> (zoek naar <code>NOODNUMMERS</code>). Tot dan staat dat ook onderaan de afgedrukte kaart.</div>') +
+        '<h3>Bergredding ter plaatse</h3>' +
+        '<div class="form-grid">' +
+          veld("Naam", "emergency.bergredding.naam", { placeholder: "bv. PGHM Briançon" }) +
+          veld("Telefoon", "emergency.bergredding.telefoon", { type: "tel", placeholder: "+33 …" }) +
+        '</div>' +
+        '<h3>Dichtstbijzijnde ziekenhuis</h3>' +
+        '<div class="form-grid">' +
+          veld("Naam", "emergency.ziekenhuis.naam", { placeholder: "bv. Centre hospitalier de Briançon" }) +
+          veld("Telefoon", "emergency.ziekenhuis.telefoon", { type: "tel" }) +
+          veld("Adres", "emergency.ziekenhuis.adres", { span2: true }) +
+        '</div>' +
+      '</section>' +
+
+      // --- verblijfplaatsen ---
+      '<section class="form-section">' +
+        '<h2>Verblijfplaatsen</h2>' +
+        '<p class="hint">Vul ze in zodra ze geboekt zijn. Ze komen op de noodkaart én staan na het kamp al klaar in de terugblik. ' +
+          'Coördinaten als breedte, lengte (bv. <code>44.9812, 6.6021</code>): in Google Maps rechtsklikken op de plek en het eerste getal kopiëren.</p>' +
+        '<div class="row-list">' + draft.stays.map(renderStayRow).join("") + '</div>' +
+        '<button type="button" class="add-step" id="nk-add-stay">+ verblijfplaats toevoegen</button>' +
+      '</section>' +
+
+      // --- contacten ---
+      '<section class="form-section">' +
+        '<h2>Contacten</h2>' +
+        '<h3>Gsm van de begeleiders</h3>' +
+        (namen.length
+          ? '<div class="form-grid">' + namen.map(function (naam, i) {
+              return '<div class="form-field"><label>' + esc(naam) + '</label>' +
+                '<input type="tel" data-gsm="' + i + '" value="' + esc(e.gsms[naam] || "") + '" placeholder="+32 …"></div>';
+            }).join("") + '</div>'
+          : '<p class="hint">Dit kamp heeft nog geen begeleiders. Voeg ze toe via <strong>Bewerken</strong> op de kampkaart; daarna verschijnt hier een veld per persoon.</p>') +
+        '<h3>Achterwacht in België</h3>' +
+        '<p class="hint">Wie thuis bereikbaar blijft en ouders en klimzaal kan verwittigen. Leeg laten mag: dan verschijnt dit niet op de kaart.</p>' +
+        '<div class="form-grid">' +
+          veld("Naam", "emergency.achterwacht.naam") +
+          veld("Telefoon", "emergency.achterwacht.telefoon", { type: "tel" }) +
+        '</div>' +
+        '<h3>Klimzaal</h3>' +
+        '<div class="form-grid">' +
+          veld("Contactpersoon", "emergency.klimzaal.naam") +
+          veld("Telefoon", "emergency.klimzaal.telefoon", { type: "tel" }) +
+        '</div>' +
+        '<h3>Verzekering / bijstand</h3>' +
+        '<div class="form-grid cols-3">' +
+          veld("Maatschappij", "emergency.verzekering.naam") +
+          veld("Polisnummer", "emergency.verzekering.polis") +
+          veld("Noodnummer bijstand", "emergency.verzekering.telefoon", { type: "tel" }) +
+        '</div>' +
+      '</section>' +
+
+      // --- medische fiches ---
+      '<section class="form-section">' +
+        '<h2>Medische fiches</h2>' +
+        '<p class="hint">Enkel <strong>waar</strong> de fiches zich bevinden. Geen medische gegevens van deelnemers hier: die blijven op de fiches zelf.</p>' +
+        '<div class="form-grid">' +
+          veld("Waar liggen ze?", "emergency.medischeFiches", { span2: true, placeholder: "bv. rode map in bus 1, bij Jochen" }) +
+        '</div>' +
+      '</section>';
+
+    bindForm();
+  }
+
+  function renderStayRow(s, i) {
+    return '<div class="row-item" data-stay-row="' + i + '">' +
+      '<div class="row-item-head"><span>Verblijfplaats ' + (i + 1) + '</span>' +
+        '<button type="button" class="row-del" data-stay-del="' + i + '">Verwijderen</button></div>' +
+      '<div class="form-grid cols-3">' +
+        '<div class="form-field span2"><label>Naam</label><input type="text" data-stay="' + i + '" data-key="naam" value="' + esc(s.naam) + '" placeholder="bv. Refuge Terre Rouge"></div>' +
+        '<div class="form-field"><label>Type</label><select data-stay="' + i + '" data-key="type">' +
+          Object.keys(KV.VERBLIJF_TYPES).map(function (k) {
+            return '<option value="' + k + '"' + (s.type === k ? " selected" : "") + '>' + esc(KV.VERBLIJF_TYPES[k]) + '</option>';
+          }).join("") +
+        '</select></div>' +
+        '<div class="form-field"><label>Eerste nacht</label><input type="date" data-stay="' + i + '" data-key="datum" value="' + esc(s.datum) + '"></div>' +
+        '<div class="form-field"><label>Aantal nachten</label><input type="number" min="1" step="1" data-stay="' + i + '" data-key="nachten" value="' + esc(s.nachten) + '"></div>' +
+        '<div class="form-field"><label>Telefoon</label><input type="tel" data-stay="' + i + '" data-key="telefoon" value="' + esc(s.telefoon) + '"></div>' +
+        '<div class="form-field span2"><label>Coördinaten</label><input type="text" data-stay="' + i + '" data-key="coords" value="' + esc(s.coords) + '" placeholder="44.9812, 6.6021"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function bindForm() {
+    var wrap = document.getElementById("form-wrap");
+
+    wrap.querySelectorAll("[data-path]").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        KV.zetPad(draft, inp.getAttribute("data-path"), inp.value);
+        changed();
+      });
+    });
+    wrap.querySelectorAll("[data-gsm]").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        draft.emergency.gsms[begeleiders()[Number(inp.getAttribute("data-gsm"))]] = inp.value;
+        changed();
+      });
+    });
+    wrap.querySelectorAll("[data-stay]").forEach(function (inp) {
+      var ev = inp.tagName === "SELECT" ? "change" : "input";
+      inp.addEventListener(ev, function () {
+        var s = draft.stays[Number(inp.getAttribute("data-stay"))];
+        var key = inp.getAttribute("data-key");
+        s[key] = key === "nachten" ? Math.max(1, parseInt(inp.value, 10) || 1) : inp.value;
+        changed();
+      });
+    });
+    wrap.querySelectorAll("[data-stay-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var i = Number(btn.getAttribute("data-stay-del"));
+        var s = draft.stays[i];
+        if (s.naam.trim() && !window.confirm("Verblijfplaats \"" + s.naam.trim() + "\" verwijderen?")) return;
+        draft.stays.splice(i, 1);
+        page.markDirty();
+        renderForm(); renderCard();
+      });
+    });
+    document.getElementById("nk-add-stay").addEventListener("click", function () {
+      // Een nieuwe plek start de dag na de vorige, dat is meestal juist bij een huttentocht.
+      var vorige = draft.stays[draft.stays.length - 1];
+      var datum = vorige && vorige.datum ? KV.shiftDate(vorige.datum, vorige.nachten) : "";
+      draft.stays.push(KV.normVerblijf({ datum: datum }));
+      page.markDirty();
+      renderForm(); renderCard();
+      var velden = document.querySelectorAll('[data-key="naam"]');
+      if (velden.length) velden[velden.length - 1].focus();
+    });
+    document.getElementById("nk-land").addEventListener("change", function (ev) {
+      draft.emergency.land = ev.target.value;
+      page.markDirty();
+      renderForm(); renderCard();
+    });
+  }
+
+  function changed() { page.markDirty(); renderCard(); }
+
+  /* ---------------- de kaart ---------------- */
+
+  function leeg() { return '<span class="nk-leeg">—</span>'; }
+
+  function tel(nr) {
+    nr = (nr || "").trim();
+    if (!nr) return leeg();
+    return '<a class="nk-tel" href="tel:' + esc(nr.replace(/[^\d+]/g, "")) + '">' + esc(nr) + '</a>';
+  }
+
+  function rij(k, v) { return '<div class="nk-rij"><span class="k">' + esc(k) + '</span><span class="v">' + v + '</span></div>'; }
+
+  function naamEnTel(c) {
+    if (!c.naam.trim() && !c.telefoon.trim()) return leeg();
+    return (c.telefoon.trim() ? tel(c.telefoon) : leeg()) + (c.naam.trim() ? '<small>' + esc(c.naam) + '</small>' : '');
+  }
+
+  function datumKort(d) {
+    var s = KV.normalizeDateStr(d);
+    if (!s) return "";
+    var p = s.split("-");
+    var wd = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]))).getUTCDay();
+    return WEEKDAGEN[wd] + " " + p[2] + "/" + p[1];
+  }
+
+  function renderCard() {
+    var e = draft.emergency;
+    var land = KV.NOODNUMMERS[e.land];
+    var nummers = land ? land.nummers : [{ nr: "112", wat: "Europees noodnummer (land nog niet ingevuld)" }];
+    var range = camp.startDate ? KV.formatDateNL(camp.startDate) + (camp.endDate ? " → " + KV.formatDateNL(camp.endDate) : "") : "";
+    var verblijven = draft.stays.filter(function (s) { return s.naam.trim() || s.telefoon.trim() || s.coords.trim(); })
+      .slice().sort(function (a, b) { return (a.datum || "9999") < (b.datum || "9999") ? -1 : (a.datum === b.datum ? 0 : 1); });
+    var namen = begeleiders();
+    var heeftAchterwacht = e.achterwacht.naam.trim() || e.achterwacht.telefoon.trim();
+    var nagekeken = KV.NOODNUMMERS_NAGEKEKEN;
+    var vz = e.verzekering;
+
+    document.getElementById("card-slot").innerHTML =
+      '<article class="nk-card">' +
+        '<header class="nk-head">' +
+          '<div><div class="nk-label">Noodkaart</div><h1>' + esc(camp.name) + '</h1>' +
+            '<div class="nk-sub">' + esc([camp.destination, range].filter(Boolean).join(" · ")) + '</div></div>' +
+          '<div class="nk-land">' + (land ? esc(land.label) : '') + '</div>' +
+        '</header>' +
+
+        '<div class="nk-nummers">' + nummers.map(function (n) {
+          return '<div class="nk-nr"><a class="n nk-tel" href="tel:' + esc(n.nr) + '">' + esc(n.nr) + '</a><span class="w">' + esc(n.wat) + '</span></div>';
+        }).join("") + '</div>' +
+
+        '<div class="nk-grid">' +
+          '<section class="nk-section"><h2>Ter plaatse</h2>' +
+            rij("Bergredding", naamEnTel(e.bergredding)) +
+            rij("Ziekenhuis", (e.ziekenhuis.telefoon.trim() ? tel(e.ziekenhuis.telefoon) : (e.ziekenhuis.naam.trim() ? "" : leeg())) +
+              (e.ziekenhuis.naam.trim() ? '<small>' + esc(e.ziekenhuis.naam) + '</small>' : '') +
+              (e.ziekenhuis.adres.trim() ? '<small>' + esc(e.ziekenhuis.adres) + '</small>' : '')) +
+          '</section>' +
+          '<section class="nk-section"><h2>Begeleiders</h2>' +
+            (namen.length ? namen.map(function (naam) { return rij(naam, tel(e.gsms[naam])); }).join("") : rij("Nog geen begeleiders", leeg())) +
+          '</section>' +
+        '</div>' +
+
+        '<section class="nk-section"><h2>Verblijfplaatsen</h2>' +
+          (verblijven.length
+            ? '<table class="nk-table"><thead><tr><th>Nacht</th><th>Naam</th><th>Telefoon</th><th>Coördinaten</th></tr></thead><tbody>' +
+                verblijven.map(function (s) {
+                  return '<tr>' +
+                    '<td>' + (s.datum ? esc(datumKort(s.datum)) + (s.nachten > 1 ? ' <span class="type">' + s.nachten + ' nachten</span>' : '') : leeg()) + '</td>' +
+                    '<td>' + (s.naam.trim() ? esc(s.naam) : leeg()) + '<span class="type">' + esc(KV.VERBLIJF_TYPES[s.type]) + '</span></td>' +
+                    '<td>' + tel(s.telefoon) + '</td>' +
+                    '<td class="coords">' + (s.coords.trim() ? esc(s.coords) : leeg()) + '</td>' +
+                  '</tr>';
+                }).join("") +
+              '</tbody></table>'
+            : rij("Nog geen verblijfplaatsen ingevuld", leeg())) +
+        '</section>' +
+
+        '<div class="nk-grid">' +
+          '<section class="nk-section"><h2>Thuisfront</h2>' +
+            (heeftAchterwacht ? rij("Achterwacht", naamEnTel(e.achterwacht)) : '') +
+            rij("Klimzaal", naamEnTel(e.klimzaal)) +
+          '</section>' +
+          '<section class="nk-section"><h2>Verzekering / bijstand</h2>' +
+            rij("Noodnummer", tel(vz.telefoon)) +
+            rij("Polis", vz.polis.trim() ? '<span class="nk-tel">' + esc(vz.polis) + '</span>' : leeg()) +
+            (vz.naam.trim() ? rij("Maatschappij", esc(vz.naam)) : '') +
+          '</section>' +
+        '</div>' +
+
+        '<section class="nk-section"><h2>Medische fiches</h2>' +
+          '<div class="nk-med">' + (e.medischeFiches.trim() ? esc(e.medischeFiches) : leeg()) + '</div>' +
+        '</section>' +
+
+        '<footer class="nk-foot">' +
+          (nagekeken.datum
+            ? '<span>Algemene noodnummers nagekeken op ' + esc(KV.formatDateNL(nagekeken.datum)) + (nagekeken.door ? ' door ' + esc(nagekeken.door) : '') + '</span>'
+            : '<span class="let-op">Let op: de algemene noodnummers zijn nog niet nagekeken.</span>') +
+          '<span>Afgedrukt op ' + esc(KV.formatDateNL(KV.todayStr())) + '</span>' +
+        '</footer>' +
+      '</article>';
+  }
+
+  document.getElementById("print-btn").addEventListener("click", function () {
+    if (page.isDirty() && !window.confirm("Er zijn nog niet-opgeslagen wijzigingen. De kaart wordt afgedrukt zoals ze nu op het scherm staat, maar de wijzigingen zijn nog niet bewaard. Toch afdrukken?")) return;
+    window.print();
+  });
+
+  page.start();
+})();
+</script>

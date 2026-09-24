@@ -1,0 +1,302 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Terugblik</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  .md-preview summary{ cursor: pointer; font-family: var(--font-mono); font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+  .md-preview pre{ margin: 12px 0 0; padding: 14px 16px; background: var(--surface-2); border-radius: 6px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto; }
+  .tb-meta{ font-size: 13px; color: var(--ink-soft); }
+</style>
+
+<div class="page">
+  <header class="top">
+    <div>
+      <div class="eyebrow"><span class="dot" id="conn-dot"></span><span id="conn-text">Verbinden…</span></div>
+      <h1>Terugblik</h1>
+      <p class="dek" id="dek">Wat er effectief gebeurd is op het kamp: route, verblijf, groep en werkpunten. Vul het in zolang alles nog vers zit.</p>
+      <a class="top-link" id="back-link" href="kampvoorbereiding.html">← Terug naar Kampvoorbereiding</a>
+    </div>
+  </header>
+
+  <div id="banner-slot"></div>
+  <div id="export-slot"></div>
+  <div id="page-slot"></div>
+
+  <div class="save-bar" hidden>
+    <span class="save-status" id="save-status"></span>
+    <div class="save-actions">
+      <button class="btn" id="export-btn" type="button" title="Downloadt een .md-bestand in het formaat van de routedatabank">Exporteer naar databank</button>
+      <button class="btn primary" id="save-btn" type="button" disabled>Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var esc = KV.escapeHtml;
+
+  var camp = null;
+  var draft = null; // de terugblik zoals hij nu op het scherm staat
+
+  var page = KV.createEditPage({
+    pagina: "terugblik.html",
+    huidig: function (c) { return { review: c.review }; },
+    nooitOpgeslagen: function (c) { return !KV.heeftTerugblik(c); },
+    onKamp: function (c) {
+      camp = c;
+      // Bestaat er al een terugblik, dan komen verblijfplaatsen die later nog
+      // bij het kamp kwamen er alsnog bij. Anders: een voorstel op basis van
+      // wat er al bekend is. In beide gevallen telt dat niet als wijziging.
+      draft = c.review
+        ? KV.vulPlekkenAan(JSON.parse(JSON.stringify(c.review)), c.stays)
+        : KV.nieuweTerugblik(c);
+      document.title = "Terugblik — " + c.name;
+      document.getElementById("dek").textContent = c.name + (c.destination ? " · " + c.destination : "") +
+        (c.startDate ? " · " + KV.formatDateNL(c.startDate) + (c.endDate ? " → " + KV.formatDateNL(c.endDate) : "") : "");
+      if (c.archived) {
+        var back = document.getElementById("back-link");
+        back.href = "archief.html";
+        back.textContent = "← Terug naar Archief";
+      }
+      renderForm();
+    },
+    velden: function () {
+      draft.bijgewerkt = KV.todayStr();
+      var bewaar = JSON.parse(JSON.stringify(draft));
+      // Volledig lege rijen hoeven niet bewaard te worden.
+      bewaar.dagen = bewaar.dagen.filter(function (d) {
+        return Object.keys(d).some(function (k) { return String(d[k]).trim(); });
+      });
+      bewaar.plekken = bewaar.plekken.filter(function (p) { return p.naam.trim() || p.contact.trim() || p.ervaring.trim(); });
+      return { review: JSON.stringify(bewaar) };
+    },
+    naOpslaan: function () {
+      draft = JSON.parse(JSON.stringify(camp.review));
+      if (!draft.dagen.length) draft.dagen.push(KV.normDag());
+      renderForm();
+    }
+  });
+
+  /* ---------------- formulier ---------------- */
+
+  function tekstveld(label, pad, opts) {
+    opts = opts || {};
+    var id = "f-" + pad.replace(/\./g, "-");
+    var waarde = KV.leesPad(draft, pad) || "";
+    var invoer = opts.rows
+      ? '<textarea id="' + id + '" rows="' + opts.rows + '" data-path="' + esc(pad) + '"' + (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') + '>' + esc(waarde) + '</textarea>'
+      : '<input id="' + id + '" type="text" data-path="' + esc(pad) + '" value="' + esc(waarde) + '"' +
+        (opts.inputmode ? ' inputmode="' + opts.inputmode + '"' : '') +
+        (opts.list ? ' list="' + opts.list + '"' : '') +
+        (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') + '>';
+    return '<div class="form-field' + (opts.span2 ? " span2" : "") + '"><label for="' + id + '">' + esc(label) + '</label>' + invoer + '</div>';
+  }
+
+  function renderForm() {
+    var namen = KV.guideNames(camp.guides);
+    var r = draft;
+
+    document.getElementById("page-slot").innerHTML =
+      '<section class="form-section">' +
+        '<h2>Algemeen</h2>' +
+        '<p class="tb-meta">' + (KV.heeftTerugblik(camp)
+          ? 'Laatst opgeslagen op ' + esc(KV.formatDateNL(camp.review.bijgewerkt)) + (camp.review.door ? ' door ' + esc(camp.review.door) : '') + '.'
+          : 'Nog nooit opgeslagen. Wat al ingevuld staat, komt uit de verblijfplaatsen en de begeleiders van dit kamp.') + '</p>' +
+        '<div class="form-grid">' +
+          tekstveld("Ingevuld door", "door", { list: "tb-begeleiders" }) +
+        '</div>' +
+        '<datalist id="tb-begeleiders">' + namen.map(function (n) { return '<option value="' + esc(n) + '">'; }).join("") + '</datalist>' +
+      '</section>' +
+
+      '<section class="form-section">' +
+        '<h2>Route per dag</h2>' +
+        '<p class="hint">Wat er effectief gestapt werd, niet wat gepland was. Heb je een GPX, neem de cijfers daaruit over: die zijn preciezer dan een schatting.</p>' +
+        '<div class="row-list">' + r.dagen.map(renderDag).join("") + '</div>' +
+        '<button type="button" class="add-step" id="tb-add-dag">+ dag toevoegen</button>' +
+      '</section>' +
+
+      '<section class="form-section">' +
+        '<h2>Hutten &amp; camping</h2>' +
+        '<p class="hint">Vooraf ingevuld met de verblijfplaatsen van de noodkaart. Een plek die daar niet stond, voeg je hier toe.</p>' +
+        '<div class="row-list">' + r.plekken.map(renderPlek).join("") + '</div>' +
+        '<button type="button" class="add-step" id="tb-add-plek">+ plek toevoegen</button>' +
+      '</section>' +
+
+      '<section class="form-section">' +
+        '<h2>Groep &amp; niveau</h2>' +
+        '<div class="form-grid">' +
+          tekstveld("Aantal deelnemers", "groep.deelnemers", { inputmode: "numeric" }) +
+          tekstveld("Aantal begeleiders", "groep.begeleiders", { inputmode: "numeric" }) +
+          '<div class="form-field span2"><label>Deze route is geschikt voor</label><div class="check-row">' +
+            Object.keys(KV.GESCHIKT_VOOR).map(function (k) {
+              return '<label><input type="checkbox" data-geschikt="' + esc(k) + '"' + (r.groep.geschiktVoor.indexOf(k) !== -1 ? " checked" : "") + '> ' + esc(KV.GESCHIKT_VOOR[k]) + '</label>';
+            }).join("") +
+          '</div></div>' +
+          tekstveld("Niveau van de groep", "groep.niveau", { span2: true, rows: 3, placeholder: "bv. vlotte groep, twee deelnemers met hoogtevrees op de graat van dag 2" }) +
+        '</div>' +
+      '</section>' +
+
+      '<section class="form-section">' +
+        '<h2>Werkpunten &amp; logistiek</h2>' +
+        '<div class="form-grid">' +
+          tekstveld("Wat ging goed", "werkpunten.goed", { span2: true, rows: 3 }) +
+          tekstveld("Wat kan beter", "werkpunten.beter", { span2: true, rows: 3 }) +
+          tekstveld("Bus, container en klimzaal", "werkpunten.logistiek", { span2: true, rows: 3, placeholder: "bv. busje pas om 9u beschikbaar, gasvuur ontbrak in de container" }) +
+          tekstveld("Tips voor de volgende keer", "werkpunten.tips", { span2: true, rows: 3 }) +
+        '</div>' +
+      '</section>' +
+
+      '<section class="form-section md-preview">' +
+        '<details id="tb-preview"><summary>Bekijk wat er in het exportbestand komt</summary><pre id="tb-md"></pre></details>' +
+      '</section>';
+
+    bindForm();
+    updatePreview();
+  }
+
+  function renderDag(d, i) {
+    function v(key, label, extra) {
+      return '<div class="form-field' + (extra && extra.span2 ? " span2" : "") + '"><label>' + esc(label) + '</label>' +
+        (extra && extra.rows
+          ? '<textarea rows="' + extra.rows + '" data-dag="' + i + '" data-key="' + key + '" placeholder="' + esc(extra.placeholder || "") + '">' + esc(d[key]) + '</textarea>'
+          : '<input type="text" data-dag="' + i + '" data-key="' + key + '" value="' + esc(d[key]) + '"' +
+            (extra && extra.inputmode ? ' inputmode="' + extra.inputmode + '"' : '') +
+            (extra && extra.placeholder ? ' placeholder="' + esc(extra.placeholder) + '"' : '') + '>') +
+      '</div>';
+    }
+    return '<div class="row-item">' +
+      '<div class="row-item-head"><span>Dag ' + (i + 1) + '</span>' +
+        '<button type="button" class="row-del" data-dag-del="' + i + '">Verwijderen</button></div>' +
+      '<div class="form-grid cols-3">' +
+        v("van", "Van") + v("naar", "Naar") + v("km", "Afstand (km)", { inputmode: "decimal", placeholder: "bv. 9,3" }) +
+        v("stijgen", "Stijgen (m)", { inputmode: "numeric", placeholder: "bv. 684" }) +
+        v("dalen", "Dalen (m)", { inputmode: "numeric", placeholder: "bv. 507" }) +
+        v("uren", "Stapuren", { inputmode: "decimal", placeholder: "bv. 4,5" }) +
+        v("afwijking", "Afwijking van de planning, en waarom", { span2: true, rows: 2, placeholder: "bv. pas omzeild wegens sneeuw; laatste stuk ingekort omdat de groep moe was" }) +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderPlek(p, i) {
+    return '<div class="row-item">' +
+      '<div class="row-item-head"><span>' + esc(KV.VERBLIJF_TYPES[p.type]) + '</span>' +
+        '<button type="button" class="row-del" data-plek-del="' + i + '">Verwijderen</button></div>' +
+      '<div class="form-grid cols-3">' +
+        '<div class="form-field"><label>Naam</label><input type="text" data-plek="' + i + '" data-key="naam" value="' + esc(p.naam) + '"></div>' +
+        '<div class="form-field"><label>Type</label><select data-plek="' + i + '" data-key="type">' +
+          Object.keys(KV.VERBLIJF_TYPES).map(function (k) {
+            return '<option value="' + k + '"' + (p.type === k ? " selected" : "") + '>' + esc(KV.VERBLIJF_TYPES[k]) + '</option>';
+          }).join("") +
+        '</select></div>' +
+        '<div class="form-field"><label>Zouden we terugkeren?</label><select data-plek="' + i + '" data-key="terug">' +
+          '<option value="">—</option>' +
+          Object.keys(KV.TERUGKEREN).map(function (k) {
+            return '<option value="' + k + '"' + (p.terug === k ? " selected" : "") + '>' + esc(KV.TERUGKEREN[k]) + '</option>';
+          }).join("") +
+        '</select></div>' +
+        '<div class="form-field span2"><label>Boekingscontact</label><input type="text" data-plek="' + i + '" data-key="contact" value="' + esc(p.contact) + '" placeholder="naam, telefoon of e-mail, taal"></div>' +
+        '<div class="form-field span2"><label>Ervaring / aandachtspunten</label><textarea rows="3" data-plek="' + i + '" data-key="ervaring" placeholder="bv. vriendelijke uitbater, douche met muntjes, geen netwerk, laatste stuk ernaartoe is steil">' + esc(p.ervaring) + '</textarea></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function bindForm() {
+    var slot = document.getElementById("page-slot");
+
+    slot.querySelectorAll("[data-path]").forEach(function (inp) {
+      inp.addEventListener("input", function () { KV.zetPad(draft, inp.getAttribute("data-path"), inp.value); changed(); });
+    });
+    slot.querySelectorAll("[data-dag]").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        draft.dagen[Number(inp.getAttribute("data-dag"))][inp.getAttribute("data-key")] = inp.value;
+        changed();
+      });
+    });
+    slot.querySelectorAll("[data-plek]").forEach(function (inp) {
+      var ev = inp.tagName === "SELECT" ? "change" : "input";
+      inp.addEventListener(ev, function () {
+        draft.plekken[Number(inp.getAttribute("data-plek"))][inp.getAttribute("data-key")] = inp.value;
+        changed();
+        // Het type staat ook in de titel van het blok.
+        if (inp.getAttribute("data-key") === "type") renderForm();
+      });
+    });
+    slot.querySelectorAll("[data-geschikt]").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        draft.groep.geschiktVoor = Object.keys(KV.GESCHIKT_VOOR).filter(function (k) {
+          var el = slot.querySelector('[data-geschikt="' + k + '"]');
+          return el && el.checked;
+        });
+        changed();
+      });
+    });
+    slot.querySelectorAll("[data-dag-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var i = Number(btn.getAttribute("data-dag-del"));
+        var d = draft.dagen[i];
+        var ingevuld = Object.keys(d).some(function (k) { return String(d[k]).trim(); });
+        if (ingevuld && !window.confirm("Dag " + (i + 1) + " verwijderen?")) return;
+        draft.dagen.splice(i, 1);
+        page.markDirty(); renderForm();
+      });
+    });
+    slot.querySelectorAll("[data-plek-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var i = Number(btn.getAttribute("data-plek-del"));
+        var p = draft.plekken[i];
+        if ((p.naam.trim() || p.ervaring.trim()) && !window.confirm("\"" + (p.naam.trim() || "Deze plek") + "\" uit de terugblik verwijderen? Op de noodkaart blijft hij staan.")) return;
+        draft.plekken.splice(i, 1);
+        page.markDirty(); renderForm();
+      });
+    });
+    document.getElementById("tb-add-dag").addEventListener("click", function () {
+      // De nieuwe dag vertrekt waar de vorige eindigde.
+      var vorige = draft.dagen[draft.dagen.length - 1];
+      draft.dagen.push(KV.normDag({ van: vorige ? vorige.naar : "" }));
+      page.markDirty(); renderForm();
+    });
+    document.getElementById("tb-add-plek").addEventListener("click", function () {
+      draft.plekken.push(KV.normPlek());
+      page.markDirty(); renderForm();
+      var velden = document.querySelectorAll('[data-plek][data-key="naam"]');
+      if (velden.length) velden[velden.length - 1].focus();
+    });
+    document.getElementById("tb-preview").addEventListener("toggle", updatePreview);
+  }
+
+  function changed() { page.markDirty(); updatePreview(); }
+
+  /** Het voorbeeld wordt enkel bijgewerkt terwijl het openstaat. */
+  function updatePreview() {
+    var det = document.getElementById("tb-preview");
+    if (!det || !det.open) return;
+    document.getElementById("tb-md").textContent = KV.terugblikNaarMarkdown(camp, draft);
+  }
+
+  /* ---------------- export ---------------- */
+
+  document.getElementById("export-btn").addEventListener("click", function () {
+    if (!camp) return;
+    var naam = KV.databankBestandsnaam(camp);
+    KV.downloadTekst(naam, KV.terugblikNaarMarkdown(camp, draft));
+    var land = camp.emergency.land || KV.landVanBestemming(camp.destination) || "";
+    var map = land ? "Routedatabank/landen/" + land + "/" : "Routedatabank/landen/<land>/";
+    document.getElementById("export-slot").innerHTML =
+      '<div class="banner info"><strong>' + esc(naam) + '</strong> staat in je downloads. ' +
+      'Zet het in <code>' + esc(map) + '</code> op de gedeelde Drive, en voeg een regel toe aan de tabel in ' +
+      '<code>index.md</code> van dat land.' +
+      (page.isDirty() ? ' <strong>Let op:</strong> je wijzigingen hier zijn nog niet opgeslagen; het bestand bevat ze wel.' : '') +
+      '</div>';
+    document.getElementById("export-slot").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+
+  page.start();
+})();
+</script>
