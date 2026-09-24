@@ -10,6 +10,9 @@
   .md-preview summary{ cursor: pointer; font-family: var(--font-mono); font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
   .md-preview pre{ margin: 12px 0 0; padding: 14px 16px; background: var(--surface-2); border-radius: 6px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto; }
   .tb-meta{ font-size: 13px; color: var(--ink-soft); }
+  .index-regel{ margin-top: 12px; display:flex; flex-direction:column; gap: 6px; align-items:flex-start; }
+  .index-regel textarea{ width: 100%; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 10px; border-radius: 5px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); resize: vertical; }
+  @media (max-width: 640px){ .index-regel textarea{ font-size: 16px; } }
 </style>
 
 <div class="page">
@@ -288,14 +291,34 @@
     KV.downloadTekst(naam, KV.terugblikNaarMarkdown(camp, draft));
     var land = camp.emergency.land || KV.landVanBestemming(camp.destination) || "";
     var map = land ? "Routedatabank/landen/" + land + "/" : "Routedatabank/landen/<land>/";
+    var regel = KV.databankIndexRegel(camp, draft);
     document.getElementById("export-slot").innerHTML =
       '<div class="banner info"><strong>' + esc(naam) + '</strong> staat in je downloads. ' +
-      'Zet het in <code>' + esc(map) + '</code> op de gedeelde Drive, en voeg een regel toe aan de tabel in ' +
-      '<code>index.md</code> van dat land.' +
+      'Zet het in <code>' + esc(map) + '</code> op de gedeelde Drive.' +
       (page.isDirty() ? ' <strong>Let op:</strong> je wijzigingen hier zijn nog niet opgeslagen; het bestand bevat ze wel.' : '') +
+      '<div class="index-regel">' +
+        '<span>Plak deze regel in de tabel van <code>' + esc(map) + 'index.md</code>, bovenaan (nieuwste eerst). ' +
+          'Vul "(aan te vullen)" nog aan.</span>' +
+        '<textarea id="tb-index-regel" rows="2" readonly>' + esc(regel) + '</textarea>' +
+        '<button type="button" class="btn small" id="tb-copy">Kopieer regel</button>' +
+      '</div>' +
       '</div>';
+    document.getElementById("tb-copy").addEventListener("click", kopieerRegel);
     document.getElementById("export-slot").scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
+
+  function kopieerRegel() {
+    var veld = document.getElementById("tb-index-regel");
+    var knop = document.getElementById("tb-copy");
+    function gelukt() { knop.textContent = "Gekopieerd ✓"; }
+    // navigator.clipboard werkt enkel via https of localhost; anders de oude weg.
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(veld.value).then(gelukt, function () { veld.select(); });
+    } else {
+      veld.select();
+      try { if (document.execCommand("copy")) gelukt(); } catch (e) { /* tekst blijft geselecteerd: Ctrl+C */ }
+    }
+  }
 
   page.start();
 })();

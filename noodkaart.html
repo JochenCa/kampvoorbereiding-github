@@ -127,6 +127,8 @@
         if (nr) gsms[naam] = nr;
       });
       draft.emergency.gsms = gsms;
+      // Een busje zonder nummerplaat helpt niemand bij pech.
+      draft.emergency.busjes = draft.emergency.busjes.filter(function (b) { return b.nummerplaat.trim(); });
       // Een plek zonder naam, telefoon of coördinaten is leeg, ook al kreeg
       // ze bij het toevoegen vanzelf een datum.
       return {
@@ -242,6 +244,28 @@
         '</div>' +
       '</section>' +
 
+      // --- busjes ---
+      '<section class="form-section">' +
+        '<h2>Busjes en pechbijstand</h2>' +
+        '<p class="hint">Bij pech of een ongeval vraagt de pechdienst meteen de nummerplaat. Deze gegevens gaan mee als je het kamp dupliceert.</p>' +
+        '<div class="form-grid">' +
+          veld("Pechbijstand", "emergency.pechbijstand.naam", { placeholder: "bv. Touring (via klimzaal)" }) +
+          veld("Telefoon pechbijstand", "emergency.pechbijstand.telefoon", { type: "tel" }) +
+        '</div>' +
+        '<h3>Busjes</h3>' +
+        '<div class="row-list">' + e.busjes.map(function (b, i) {
+          return '<div class="row-item">' +
+            '<div class="row-item-head"><span>Busje ' + (i + 1) + '</span>' +
+              '<button type="button" class="row-del" data-bus-del="' + i + '">Verwijderen</button></div>' +
+            '<div class="form-grid">' +
+              '<div class="form-field"><label>Naam</label><input type="text" data-bus="' + i + '" data-key="naam" value="' + esc(b.naam) + '" placeholder="bv. bus 1 (wit)"></div>' +
+              '<div class="form-field"><label>Nummerplaat</label><input type="text" data-bus="' + i + '" data-key="nummerplaat" value="' + esc(b.nummerplaat) + '" placeholder="1-ABC-123"></div>' +
+            '</div>' +
+          '</div>';
+        }).join("") + '</div>' +
+        '<button type="button" class="add-step" id="nk-add-bus">+ busje toevoegen</button>' +
+      '</section>' +
+
       // --- medische fiches ---
       '<section class="form-section">' +
         '<h2>Medische fiches</h2>' +
@@ -307,6 +331,26 @@
         renderForm(); renderCard();
       });
     });
+    wrap.querySelectorAll("[data-bus]").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        draft.emergency.busjes[Number(inp.getAttribute("data-bus"))][inp.getAttribute("data-key")] = inp.value;
+        changed();
+      });
+    });
+    wrap.querySelectorAll("[data-bus-del]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        draft.emergency.busjes.splice(Number(btn.getAttribute("data-bus-del")), 1);
+        page.markDirty();
+        renderForm(); renderCard();
+      });
+    });
+    document.getElementById("nk-add-bus").addEventListener("click", function () {
+      draft.emergency.busjes.push(KV.normBusje({ naam: "Bus " + (draft.emergency.busjes.length + 1) }));
+      page.markDirty();
+      renderForm(); renderCard();
+      var velden = document.querySelectorAll('[data-bus][data-key="nummerplaat"]');
+      if (velden.length) velden[velden.length - 1].focus();
+    });
     document.getElementById("nk-add-stay").addEventListener("click", function () {
       // Een nieuwe plek start de dag na de vorige, dat is meestal juist bij een huttentocht.
       var vorige = draft.stays[draft.stays.length - 1];
@@ -362,6 +406,7 @@
     var heeftAchterwacht = e.achterwacht.naam.trim() || e.achterwacht.telefoon.trim();
     var nagekeken = KV.NOODNUMMERS_NAGEKEKEN;
     var vz = e.verzekering;
+    var busjes = e.busjes.filter(function (b) { return b.nummerplaat.trim(); });
 
     document.getElementById("card-slot").innerHTML =
       '<article class="nk-card">' +
@@ -414,9 +459,17 @@
           '</section>' +
         '</div>' +
 
-        '<section class="nk-section"><h2>Medische fiches</h2>' +
-          '<div class="nk-med">' + (e.medischeFiches.trim() ? esc(e.medischeFiches) : leeg()) + '</div>' +
-        '</section>' +
+        '<div class="nk-grid">' +
+          '<section class="nk-section"><h2>Busjes</h2>' +
+            rij("Pechbijstand", naamEnTel(e.pechbijstand)) +
+            (busjes.length
+              ? busjes.map(function (b) { return rij(b.naam.trim() || "Busje", '<span class="nk-tel">' + esc(b.nummerplaat) + '</span>'); }).join("")
+              : rij("Nummerplaten", leeg())) +
+          '</section>' +
+          '<section class="nk-section"><h2>Medische fiches</h2>' +
+            '<div class="nk-med">' + (e.medischeFiches.trim() ? esc(e.medischeFiches) : leeg()) + '</div>' +
+          '</section>' +
+        '</div>' +
 
         '<footer class="nk-foot">' +
           (nagekeken.datum

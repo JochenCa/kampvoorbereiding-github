@@ -197,8 +197,13 @@ var KV = (function () {
 
   /* Versiegeschiedenis van de tool zelf — nieuwste bovenaan. Vul hier een
      nieuwe regel bij zodra er iets wijzigt, en pas VERSION mee aan. */
-  var VERSION = "2.3";
+  var VERSION = "2.4";
   var CHANGELOG = [
+    { version: "2.4", date: "2026-09-24", changes: [
+      "Noodkaart: pechbijstand en de nummerplaten van de busjes",
+      "Checkliststappen over hutten, camping, noodnummers, evaluatie en routedatabank linken naar de noodkaart of de terugblik, en worden groen zodra het daar ingevuld is",
+      "Na de export van een terugblik staat de regel voor index.md van het land klaar om te kopiëren"
+    ]},
     { version: "2.3", date: "2026-09-24", changes: [
       "Nieuwe knop \"Noodkaart\" op elke kampkaart: één A4 met noodnummers van het land, verblijfplaatsen, gsm's van de begeleiders, klimzaal en verzekering",
       "Per kamp een lijst verblijfplaatsen (hutten, camping), die ook in de terugblik terugkomt",
@@ -465,19 +470,78 @@ var KV = (function () {
       achterwacht: normContact(e.achterwacht),
       klimzaal: normContact(e.klimzaal),
       verzekering: { naam: tekst(vz.naam), polis: tekst(vz.polis), telefoon: tekst(vz.telefoon) },
+      pechbijstand: normContact(e.pechbijstand),
+      busjes: Array.isArray(e.busjes) ? e.busjes.map(normBusje) : [],
       medischeFiches: tekst(e.medischeFiches)
     };
   }
 
+  function normBusje(b) { b = b || {}; return { naam: tekst(b.naam), nummerplaat: tekst(b.nummerplaat) }; }
+
   /** Wat een gedupliceerd kamp meekrijgt van de noodkaart: enkel wat van jaar
-   *  tot jaar hetzelfde blijft. Nummers ter plaatse, gsm's en de plaats van de
-   *  medische fiches horen bij dat ene kamp. */
+   *  tot jaar hetzelfde blijft — klimzaal, verzekering, pechbijstand en de
+   *  busjes (dezelfde van de klimzaal). Nummers ter plaatse, gsm's en de plaats
+   *  van de medische fiches horen bij dat ene kamp. */
   function noodinfoVoorDuplicaat(bron) {
     var n = normNoodinfo(bron);
     var leeg = normNoodinfo(null);
     leeg.klimzaal = n.klimzaal;
     leeg.verzekering = n.verzekering;
+    leeg.pechbijstand = n.pechbijstand;
+    leeg.busjes = n.busjes;
     return leeg;
+  }
+
+  /* ---------------- Checkliststappen die op een andere pagina ingevuld worden ----------------
+     Sommige standaardstappen gaan over gegevens die op de noodkaart of in de
+     terugblik staan. Zo'n stap krijgt een link naar die pagina, en een groene
+     melding zodra de gegevens daar ingevuld zijn. Afvinken blijft een bewuste
+     keuze van de begeleider: de tool vinkt niets zelf af.
+
+     Gekoppeld op de exacte titel uit DEFAULT_CHECKLIST. Een zelf toegevoegde of
+     hernoemde stap krijgt dus geen link. `ingevuld` krijgt het kamp (met de
+     genormaliseerde stays/emergency/review) en geeft een korte uitleg terug
+     wanneer het in orde lijkt, of "" als er nog niets staat. */
+  var STAP_KOPPELINGEN = {
+    "Reservering hutten in orde": { pagina: "noodkaart", ingevuld: function (c) {
+      var n = c.stays.filter(function (s) { return s.type === "hut" && s.naam.trim(); }).length;
+      return n ? n + (n === 1 ? " hut" : " hutten") + " op de noodkaart" : "";
+    }},
+    "Reservering camping (basiskamp) in orde": { pagina: "noodkaart", ingevuld: function (c) {
+      return c.stays.some(function (s) { return s.type === "camping" && s.naam.trim(); }) ? "camping op de noodkaart" : "";
+    }},
+    "Noodprotocol + achterwachtpersoon vastleggen": { pagina: "noodkaart", ingevuld: function (c) {
+      return c.emergency.achterwacht.telefoon.trim() ? "achterwacht op de noodkaart" : "";
+    }},
+    "Noodnummer pechbijstand auto's": { pagina: "noodkaart", ingevuld: function (c) {
+      return c.emergency.pechbijstand.telefoon.trim() ? "op de noodkaart" : "";
+    }},
+    "Noodnummer ter plekke (lokale hulpdiensten)": { pagina: "noodkaart", ingevuld: function (c) {
+      return (c.emergency.bergredding.telefoon.trim() || c.emergency.ziekenhuis.telefoon.trim()) ? "op de noodkaart" : "";
+    }},
+    "Noodnummer klimzaal": { pagina: "noodkaart", ingevuld: function (c) {
+      return c.emergency.klimzaal.telefoon.trim() ? "op de noodkaart" : "";
+    }},
+    "Evaluatie met de begeleiders": { pagina: "terugblik", ingevuld: function (c) {
+      return heeftTerugblik(c) ? "terugblik ingevuld" : "";
+    }},
+    "Routedatabank aanvullen met ervaringen": { pagina: "terugblik", ingevuld: function (c) {
+      return heeftTerugblik(c) ? "terugblik klaar om te exporteren" : "";
+    }}
+  };
+  var PAGINA_LABELS = { noodkaart: "Noodkaart", terugblik: "Terugblik" };
+
+  /** De link die bij deze stap hoort, of null. */
+  function stapKoppeling(step, camp) {
+    var k = STAP_KOPPELINGEN[step && step.title];
+    if (!k || !camp) return null;
+    var uitleg = "";
+    try { uitleg = k.ingevuld(camp) || ""; } catch (e) { uitleg = ""; } // onvolledig kamp-object: gewoon geen melding
+    return {
+      href: k.pagina + ".html?id=" + encodeURIComponent(camp.id),
+      label: PAGINA_LABELS[k.pagina],
+      uitleg: uitleg
+    };
   }
 
   var GESCHIKT_VOOR = { "-18": "-18-kamp", "+18": "+18-kamp", "winter": "Winterkamp" };
@@ -563,6 +627,36 @@ var KV = (function () {
     var slug = bron.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "");
     if (!slug) slug = zonderAccenten(camp.name || "kamp").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "kamp";
     return jaar + "-" + slug + ".md";
+  }
+
+  var MAANDEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli",
+                 "augustus", "september", "oktober", "november", "december"];
+
+  /** De tabelregel voor de index.md van het land, om onder de kop te plakken.
+   *  De meeste landen gebruiken Editie | Regio | Niveau | Laatst gebruikt |
+   *  Bestand; Italië heeft Stapuren in de plaats van Regio. De regio kent de
+   *  tool niet, die blijft "(aan te vullen)". */
+  function databankIndexRegel(camp, review) {
+    var r = review || nieuweTerugblik(camp);
+    var landSleutel = (camp.emergency && camp.emergency.land) || landVoorNoodkaart(camp.destination);
+    var land = NOODNUMMERS[landSleutel];
+    function cel(v) { return tekst(v).trim().replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " "); }
+
+    // "Frankrijk — Névache" wordt "Névache": de landnaam staat al in de map.
+    var editie = tekst(camp.destination || camp.name);
+    if (land) {
+      var zonder = editie.replace(new RegExp("^\\s*" + land.label + "\\s*[—–,:-]*\\s*", "i"), "").trim();
+      if (zonder) editie = zonder;
+    }
+    var niveau = r.groep.geschiktVoor.map(function (k) { return GESCHIKT_VOOR[k]; }).join(" en ") || "*(aan te vullen)*";
+    var datum = normalizeDateStr(camp.startDate);
+    var gebruikt = datum ? datum.slice(0, 4) + " (" + MAANDEN[Number(datum.slice(5, 7)) - 1] + ")" : "*(aan te vullen)*";
+    var dagen = r.dagen.filter(function (d) { return d.van || d.naar || d.km || d.uren; }).length;
+    var tweede = landSleutel === "italie"
+      ? (dagen ? dagen + (dagen === 1 ? " dag" : " dagen") : "*(aan te vullen)*")
+      : "*(aan te vullen)*";
+    var bestand = databankBestandsnaam(camp);
+    return "| " + cel(editie) + " | " + tweede + " | " + niveau + " | " + gebruikt + " | [" + bestand + "](" + bestand + ") |";
   }
 
   /** De terugblik als Markdown, in dezelfde opbouw als de bestaande fiches in
@@ -1091,7 +1185,7 @@ var KV = (function () {
       var phaseDone = list.filter(function (s) { return s.done; }).length;
       return '<section class="phase">' +
         '<h4>' + escapeHtml(phase) + ' <span class="phase-count">' + phaseDone + '/' + list.length + '</span></h4>' +
-        '<ul class="steps">' + list.map(function (s) { return renderStepRow(s, datalistId, opts.stepsEditable); }).join("") + '</ul>' +
+        '<ul class="steps">' + list.map(function (s) { return renderStepRow(s, datalistId, opts.stepsEditable, camp); }).join("") + '</ul>' +
         (opts.stepsEditable
           ? '<button type="button" class="add-step" data-add-step="' + escapeHtml(phase) + '">+ stap toevoegen</button>'
           : '') +
@@ -1143,13 +1237,23 @@ var KV = (function () {
   }
 
   /** `datalistId` is leeg wanneer het kamp nog geen begeleiders heeft; dan
-   *  blijft het veld een gewoon tekstvak zonder suggesties. */
-  function renderStepRow(step, datalistId, deletable) {
+   *  blijft het veld een gewoon tekstvak zonder suggesties. `camp` is nodig
+   *  voor de link naar de noodkaart of terugblik (zie STAP_KOPPELINGEN). */
+  function renderStepRow(step, datalistId, deletable, camp) {
     var extra = stepStatusClass(step);
     var cls = "step" + (step.done ? " is-done" : "") + (extra ? " " + extra : "");
+    var koppeling = stapKoppeling(step, camp);
+    var koppelingHtml = "";
+    if (koppeling) {
+      // Ingevuld maar nog niet afgevinkt: groen, als duwtje om af te vinken.
+      var klaar = koppeling.uitleg && !step.done;
+      koppelingHtml = ' <a class="step-link' + (klaar ? " is-klaar" : "") + '" href="' + escapeHtml(koppeling.href) + '"' +
+        ' title="' + escapeHtml(koppeling.uitleg ? "Ingevuld: " + koppeling.uitleg : "Nog niet ingevuld op de " + koppeling.label.toLowerCase()) + '">' +
+        (klaar ? "✓ " + escapeHtml(koppeling.uitleg) : escapeHtml(koppeling.label) + " →") + '</a>';
+    }
     return '<li class="' + cls + '" data-step-id="' + step.id + '">' +
       '<input type="checkbox" data-step-done="' + step.id + '"' + (step.done ? " checked" : "") + '>' +
-      '<span class="step-title">' + escapeHtml(step.title) + '</span>' +
+      '<span class="step-title">' + escapeHtml(step.title) + koppelingHtml + '</span>' +
       '<input type="date" class="step-date" data-step-date="' + step.id + '" value="' + escapeHtml(step.targetDate || "") + '">' +
       '<input type="text" class="step-owner"' + (datalistId ? ' list="' + datalistId + '"' : '') +
         ' placeholder="Wie?" data-step-owner="' + step.id + '" value="' + escapeHtml(step.owner || "") + '">' +
@@ -1451,6 +1555,7 @@ var KV = (function () {
     normDag: normDag, normPlek: normPlek, normTerugblik: normTerugblik, heeftTerugblik: heeftTerugblik,
     nieuweTerugblik: nieuweTerugblik, vulPlekkenAan: vulPlekkenAan,
     databankBestandsnaam: databankBestandsnaam, terugblikNaarMarkdown: terugblikNaarMarkdown, downloadTekst: downloadTekst,
+    databankIndexRegel: databankIndexRegel, stapKoppeling: stapKoppeling, normBusje: normBusje,
     createEditPage: createEditPage, leesPad: leesPad, zetPad: zetPad,
     addStepToCamp: addStepToCamp,
     begeleiderOptions: begeleiderOptions,
