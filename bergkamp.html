@@ -226,12 +226,23 @@ footer .mono{font-family:var(--font-mono)}
 
   <section>
     <div class="sectiekop">
-      <h2>Hoe een kampweek verloopt</h2>
+      <h2>Hoe een kampweek verloopt (-18)</h2>
       <p>De opbouw is over alle edities heen vrijwel dezelfde gebleven. Zaterdag vertrekken, zondag inlopen en materiaal controleren, dan drie dagen van hut naar hut, een rustdag, en vrijdag terug.</p>
     </div>
     <div class="week" id="week"></div>
     <div class="nb">
-      <strong>Waarom die vaste opbouw?</strong> De zondag is geen opvuldag: dat is de dag waarop de rugzakken gemaakt en gecontroleerd worden, waarop iedereen leert stappen met gewicht, en waarop duidelijk wordt wie het tempo aankan. Wie pas op maandag in de bergen staat, ontdekt problemen te laat. Bij de achttienplussers duurt de tocht vijf dagen in plaats van drie.
+      <strong>Waarom die vaste opbouw?</strong> De zondag is geen opvuldag: dat is de dag waarop de rugzakken gemaakt en gecontroleerd worden, waarop iedereen leert stappen met gewicht, en waarop duidelijk wordt wie het tempo aankan. Wie pas op maandag in de bergen staat, ontdekt problemen te laat.
+    </div>
+  </section>
+
+  <section>
+    <div class="sectiekop">
+      <h2>Hoe een kampweek verloopt (+18)</h2>
+      <p>Het kamp voor achttienplussers is een bergkamp voor gevorderden. Eén dag heen, vijf stapdagen van hut naar hut, en één dag terug.</p>
+    </div>
+    <div class="week" id="week-plus18"></div>
+    <div class="nb">
+      <strong>Wat is er anders dan bij -18?</strong> Er is geen aparte inloopdag: de eerste stapdag is korter en dient om in te lopen. Er is ook geen rustdag, want de dag na de afdaling is meteen de terugreis. Daarom moet wie meegaat al één of meer bergtochten gedaan hebben, met schoenen die ingelopen zijn (minstens 50 km).
     </div>
   </section>
 
@@ -384,6 +395,51 @@ footer .mono{font-family:var(--font-mono)}
       ["18–20u","aankomst in Gent"]]}
   ];
 
+  // Het +18-kamp viel niet elk jaar op dezelfde weekdagen (2024 zaterdag tot
+  // vrijdag, 2023 en 2026 maandag tot zondag), vandaar Dag 1 tot 7. De uren
+  // komen uit de infomoment-presentatie van juli 2026.
+  var WEEK_PLUS18 = [
+    { dag:"Dag 1", titel:"Heenreis en basiskamp", items:[
+      ["5u45","verzamelen aan de klimzaal in Gent"],
+      ["6u","vertrek met de busjes"],
+      ["—","zes tot dertien uur rijden, afhankelijk van de bestemming"],
+      ["18u","tenten opzetten op de camping"],
+      ["19u","eerste avondmaal samen"]]},
+    { dag:"Dag 2", titel:"Eerste stapdag", tocht:true, items:[
+      ["7u30","ontbijt, lunchpakket en rugzak maken"],
+      ["8u","kamp opbreken, tenten in het busje"],
+      ["9u30","rit naar het vertrekpunt"],
+      ["—","een kortere dag om in te lopen, 4,5 tot 6 uur"],
+      ["16u","aankomst in de eerste hut"],
+      ["19u","avondmaal in de hut"]]},
+    { dag:"Dag 3", titel:"Tweede stapdag", tocht:true, items:[
+      ["7u","opstaan, rugzak maken"],
+      ["8u30","vertrek"],
+      ["—","7 à 8 uur stappen"],
+      ["17u","aankomst in de volgende hut"],
+      ["22u","stilte"]]},
+    { dag:"Dag 4", titel:"Derde stapdag", tocht:true, items:[
+      ["7u","opstaan"],
+      ["8u30","vertrek, zo vroeg mogelijk"],
+      ["—","7 tot 10 uur stappen, afhankelijk van de route"],
+      ["17–18u","aankomst in de volgende hut"]]},
+    { dag:"Dag 5", titel:"Vierde stapdag", tocht:true, items:[
+      ["7u","opstaan"],
+      ["8u30","vertrek"],
+      ["—","7 à 8 uur stappen"],
+      ["17u","aankomst in de laatste hut"]]},
+    { dag:"Dag 6", titel:"Afdaling naar het dal", tocht:true, items:[
+      ["9u","vertrek"],
+      ["—","± 5 uur, vooral dalen"],
+      ["15u","aan het eindpunt, busjes ophalen"],
+      ["—","terug naar de camping: tenten opzetten en douchen"],
+      ["19u","pizza in plaats van zelf koken"]]},
+    { dag:"Dag 7", titel:"Terugreis", items:[
+      ["7u","opstaan, tenten opbreken"],
+      ["8u","vertrek, ontbijt onderweg"],
+      ["± 20u","aankomst in Gent"]]}
+  ];
+
   /* Printmodus (bergkamp.html?print=1): alles staat open, want in een PDF kan
    * je niet doorklikken. Wordt gebruikt door _maak-presentatie-pdf.js. */
   var PRINTMODUS = new URLSearchParams(location.search).has("print");
@@ -522,12 +578,16 @@ footer .mono{font-family:var(--font-mono)}
   renderFotos();
 
   /* ---------------- kampweek ---------------- */
-  document.getElementById("week").innerHTML = WEEK.map(function (d) {
-    return '<article class="dag' + (d.tocht ? " tocht" : "") + '">' +
-      '<div class="naam">' + esc(d.dag) + "</div><h4>" + esc(d.titel) + "</h4><ul>" +
-      d.items.map(function (r) {
-        return "<li>" + (r[0] !== "—" ? '<span class="uur">' + esc(r[0]) + "</span> " : "") + esc(r[1]) + "</li>";
-      }).join("") + "</ul></article>";
-  }).join("");
+  function renderWeek(id, dagen) {
+    document.getElementById(id).innerHTML = dagen.map(function (d) {
+      return '<article class="dag' + (d.tocht ? " tocht" : "") + '">' +
+        '<div class="naam">' + esc(d.dag) + "</div><h4>" + esc(d.titel) + "</h4><ul>" +
+        d.items.map(function (r) {
+          return "<li>" + (r[0] !== "—" ? '<span class="uur">' + esc(r[0]) + "</span> " : "") + esc(r[1]) + "</li>";
+        }).join("") + "</ul></article>";
+    }).join("");
+  }
+  renderWeek("week", WEEK);
+  renderWeek("week-plus18", WEEK_PLUS18);
 })();
 </script>
