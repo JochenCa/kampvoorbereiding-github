@@ -107,17 +107,6 @@ section + section{border-top:1px solid var(--line)}
 .foto{border-radius:10px;overflow:hidden;background:var(--surface);border:1px solid var(--line)}
 .foto img{display:block;width:100%;aspect-ratio:3/2;object-fit:cover}
 .foto figcaption{font-size:13px;color:var(--ink-soft);padding:11px 14px}
-/* Plaatshouder: toont welk beeld hier hoort en onder welke bestandsnaam. */
-.foto.leeg{border-style:dashed;border-color:var(--line-strong);background:var(--surface-2)}
-.foto.leeg .vak{aspect-ratio:3/2;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:7px;padding:16px;text-align:center;color:var(--ink-soft)}
-.foto.leeg .wat{font-size:14px;font-weight:500;color:var(--ink)}
-.foto.leeg .hoe{font-size:12.5px;line-height:1.45;max-width:26ch}
-.foto.leeg .naam{font-family:var(--font-mono);font-size:11px;background:var(--surface);
-  border:1px solid var(--line);border-radius:5px;padding:3px 8px;color:var(--accent)}
-.fotos-nb{margin-top:16px;font-size:13.5px;color:var(--ink-soft);border-left:3px solid var(--warm);
-  background:var(--surface);border-radius:8px;padding:14px 16px}
-.fotos-nb strong{color:var(--ink)}
 
 /* ---------- tijdlijn edities ---------- */
 .tijdlijn{position:relative;padding-left:22px}
@@ -198,7 +187,7 @@ footer .mono{font-family:var(--font-mono)}
     </div>
   </header>
 
-  <section id="fotos-sectie">
+  <section id="fotos-sectie" hidden>
     <div class="sectiekop">
       <h2>Hoe het eruitziet</h2>
       <p>Vier beelden van onderweg: het basiskamp, de tocht, een berghut en het uitzicht dat je krijgt als je er geraakt.</p>
@@ -403,8 +392,10 @@ footer .mono{font-family:var(--font-mono)}
   /* ---------------- foto's ----------------
    * Zet een foto in deze map onder de naam die hieronder bij 'bestand' staat,
    * en verwijder dan het woord 'plaatshouder' in die regel — meer is er niet
-   * nodig. Formaat: liggend, 3:2 (bv. 1500 x 1000), onder 400 KB.
-   * Geen herkenbare deelnemers: deze pagina is publiek en heeft geen code. */
+   * nodig. 'hoe' zegt welk beeld er hoort; bezoekers zien dat nooit.
+   * Formaat: liggend, 3:2 (bv. 1500 x 1000), onder 400 KB.
+   * Geen herkenbare deelnemers: deze pagina is publiek en heeft geen code.
+   * Zolang er nog geen enkele foto is, blijft de hele sectie weg. */
   var FOTOS = [
     { bestand: "foto-basiskamp.jpg", plaatshouder: true,
       wat: "Het basiskamp",
@@ -425,30 +416,16 @@ footer .mono{font-family:var(--font-mono)}
   ];
 
   function renderFotos() {
-    var slot = document.getElementById("fotos");
-    var teVullen = 0;
-    slot.innerHTML = FOTOS.map(function (f) {
-      if (f.plaatshouder) {
-        teVullen++;
-        return '<figure class="foto leeg"><div class="vak">' +
-          '<span class="wat">' + esc(f.wat) + "</span>" +
-          '<span class="hoe">' + esc(f.hoe) + "</span>" +
-          '<span class="naam">' + esc(f.bestand) + "</span>" +
-        "</div></figure>";
-      }
+    var sectie = document.getElementById("fotos-sectie");
+    var klaar = FOTOS.filter(function (f) { return !f.plaatshouder; });
+    // Weghalen in plaats van verborgen laten, anders krijgt de volgende sectie
+    // een dubbele lijn bovenaan (section + section).
+    if (!klaar.length) { sectie.remove(); return; }
+    document.getElementById("fotos").innerHTML = klaar.map(function (f) {
       return '<figure class="foto"><img src="' + esc(f.bestand) + '" alt="' + esc(f.bijschrift) +
         '" loading="lazy"><figcaption>' + esc(f.bijschrift) + "</figcaption></figure>";
     }).join("");
-
-    if (teVullen) {
-      var nb = document.createElement("div");
-      nb.className = "fotos-nb";
-      nb.innerHTML = "<strong>Nog " + teVullen + " van de 4 foto's te kiezen.</strong> " +
-        "Zet ze in dezelfde map als deze pagina, onder de naam die in het vak staat. " +
-        "Liggend, verhouding 3:2, onder 400 KB per stuk. " +
-        "<strong>Geen herkenbare deelnemers</strong> — deze pagina is publiek en vraagt geen toegangscode.";
-      slot.parentNode.appendChild(nb);
-    }
+    sectie.hidden = false;
   }
 
   /* ---------------- kaart ---------------- */
